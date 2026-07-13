@@ -14,7 +14,11 @@ folder:
 Source: https://fonts.google.com/specimen/Roboto (download family, pick the
 Regular, Medium, Italic, and Medium Italic weights).
 
-This folder is gitignored for the .ttf files themselves (see root
-.gitignore) so the repo doesn't carry binary font assets — re-download them
-on each new environment/deploy, or bundle them into your Docker image if you
-containerize the app.
+Deploying to Render (or any host that builds from a git push): commit these
+four .ttf files directly to the repo. Roboto is OFL-licensed, so there's no
+licensing issue with checking in the binaries. Render only has access to
+what's in your git history — files sitting locally but excluded via
+.gitignore will silently be missing on deploy, causing PDF export to fail
+at runtime with an ENOENT looking for these files. .gitignore in this
+project does NOT exclude fonts/*.ttf for this reason; just `git add` them
+like any other file.
