@@ -1,0 +1,49 @@
+/* src/app/globals.css
+   Base global styles. Minimal by design — this project prioritizes a
+   clean, scannable, mobile-friendly ledger UI over decoration. Extend as
+   needed. Fully implemented (no logic to fill in here). */
+
+:root {
+  --color-bg: #ffffff;
+  --color-text: #1a1a1a;
+  --color-border: #d9d9d9;
+  --color-accent: #2563eb;
+  --color-warn: #b91c1c;
+  --color-stock-in: #15803d;
+  --color-usage: #1d4ed8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+a {
+  color: var(--color-accent);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+[data-low-stock='true'] {
+  background: #fff7e6;
+}
+
+[data-overdrawn='true'] {
+  outline: 2px solid var(--color-warn);
+}

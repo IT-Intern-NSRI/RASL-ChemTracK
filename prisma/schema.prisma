@@ -1,0 +1,120 @@
+// prisma/schema.prisma
+//
+// Fully implemented (declarative) — this is the database schema itself,
+// not business logic, so unlike the .ts files in this project it doesn't
+// contain "Not implemented" stubs. Run `npm run prisma:migrate` after
+// setting DATABASE_URL to create these tables in your Postgres instance.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// One row per chemical. currentBalance is a cached "latest balance" figure,
+// kept in sync by src/lib/balance.ts every time a transaction is written,
+// edited, or deleted. It always equals the balanceOut of that chemical's
+// most recent Transaction row (by sequenceNo).
+model Chemical {
+  id                String   @id @default(cuid())
+  name              String // short display name, used on the dashboard
+  cpecsDescriptor   String // full "name, form, purity, packaging" string, used on exports
+  category          String?
+  unit              String   @default("L")
+  currentBalance    Decimal  @default(0) @db.Decimal(14, 4)
+  lowStockThreshold Decimal? @db.Decimal(14, 4)
+  isArchived        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  transactions Transaction[]
+
+  @@index([name])
+}
+
+enum TransactionType {
+  STOCK_IN
+  USAGE
+}
+
+// One row per stock-in OR usage instance (never both — this is what makes
+// a same-day stock-in + usage two independent rows, per the project's
+// edge-case rule). balanceOut is stored at write-time; see src/lib/balance.ts
+// for why the ledger chain follows sequenceNo rather than the date fields.
+model Transaction {
+  id         String          @id @default(cuid())
+  chemicalId String
+  chemical   Chemical        @relation(fields: [chemicalId], references: [id])
+  type       TransactionType
+  sequenceNo Int // monotonic per chemical, assigned at write-time (insertion order)
+
+  // --- stock-in fields (populated only when type = STOCK_IN) ---
+  dateReceived     DateTime? @db.Date
+  supplierInfo     String?
+  truckerCarrier   String?
+  lotBatchNo       String?
+  quantityReceived Decimal?  @db.Decimal(14, 4)
+
+  // --- usage fields (populated only when type = USAGE) ---
+  dateUsed       DateTime? @db.Date
+  detailsOfUsage String?
+  workOrderNo    String?
+  lotBatchNoUsed String?
+  quantityUsed   Decimal?  @db.Decimal(14, 4)
+
+  // --- shared ---
+  balanceOut        Decimal @db.Decimal(14, 4)
+  balanceOverridden Boolean @default(false) // true if the user manually overwrote the auto-computed value
+  isOverdrawn       Boolean @default(false) // true if a USAGE row drove the balance negative (flagged, never blocked)
+  isAnchor          Boolean @default(false) // true if retained across a 5-year purge as the pre-cutoff balance anchor
+
+  edited      Boolean @default(false)
+  editHistory Json? // array of { field, oldValue, newValue, editedAt } entries
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chemicalId, sequenceNo])
+  @@index([chemicalId, dateUsed])
+  @@index([chemicalId, dateReceived])
+}
+
+// Single-row table (id is always 1) holding the fixed/global settings that
+// print on every exported document, plus the one admin password hash,
+// since this is a single-user app.
+model AppSettings {
+  id                   Int      @id @default(1)
+  organizationName     String?
+  registerLabel        String? // e.g. "PDEA P Register 2-13"
+  signatoryName        String?
+  signatoryCredentials String? // e.g. "Ph.D., R.Ch."
+  signatoryTitle       String? // e.g. "Pollution Control Officer, NSRI"
+  passwordHash         String
+  updatedAt            DateTime @updatedAt
+}
+
+// Written once per confirmed purge run (src/lib/purge.ts). The deleted rows
+// themselves are gone, but the fact that a purge happened, when, and what
+// it covered is retained for audit purposes.
+model PurgeLog {
+  id          String   @id @default(cuid())
+  cutoffDate  DateTime @db.Date
+  performedAt DateTime @default(now())
+  summary     Json // { chemicalId: rowsDeletedCount, ... } plus totals
+}
+
+// A prepared-but-not-yet-confirmed purge plan (see the two-step
+// prepare/confirm flow in src/lib/purge.ts). Expires after ~15 minutes;
+// confirming deletes this row along with the planned transactions.
+model PurgePreparation {
+  id                     String   @id @default(cuid())
+  token                  String   @unique
+  cutoffDate             DateTime @db.Date
+  transactionIdsToDelete Json
+  anchorTransactionIds   Json
+  createdAt              DateTime @default(now())
+  expiresAt              DateTime
+}
