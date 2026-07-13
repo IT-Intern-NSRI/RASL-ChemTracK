@@ -11,7 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { jsonError } from '@/lib/apiHelpers';
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // def GET(): Input is one NextRequest (search params: startDate, endDate,
@@ -26,7 +26,8 @@ interface RouteParams {
 //   4. Build a NextResponse from the returned Buffer with the appropriate
 //      headers, including a filename like
 //      "<chemical-name>_<start>_<end>.pdf".
-export async function GET(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
+  const params = await paramsPromise;
   if (!(await requireAuth())) {
     return jsonError('Unauthorized', 401);
   }

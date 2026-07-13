@@ -11,7 +11,7 @@ import { jsonOk } from '@/lib/apiHelpers';
 import { TransactionDTO } from '@/types';
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // def GET(): Input is one NextRequest (search params: page?, pageSize?,
@@ -30,7 +30,8 @@ interface RouteParams {
 //   6. Map rows to TransactionDTO (converting Prisma Decimal fields to
 //      plain numbers, Date fields to "YYYY-MM-DD" strings).
 //   7. Return { items, total } via jsonOk.
-export async function GET(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
+  const params = await paramsPromise;
   if (!(await requireAuth())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

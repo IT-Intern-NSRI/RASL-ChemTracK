@@ -11,7 +11,7 @@ import { chemicalUpdateSchema } from '@/lib/validation';
 import { jsonError, jsonOk } from '@/lib/apiHelpers';
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // def GET(): Input is one NextRequest and one route param (chemical id).
@@ -22,7 +22,8 @@ interface RouteParams {
 //   2. Fetch the chemical by id via Prisma.
 //   3. If not found, return 404 via jsonError.
 //   4. Return the row via jsonOk.
-export async function GET(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
+  const params = await paramsPromise;
   if (!(await requireAuth())) {
     return jsonError('Unauthorized', 401);
   }
@@ -43,7 +44,8 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
 //   2. Validate the body with chemicalUpdateSchema (all fields optional).
 //   3. Update the chemical row via Prisma; 404 if it doesn't exist.
 //   4. Return the updated row.
-export async function PATCH(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function PATCH(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
+  const params = await paramsPromise;
   if (!(await requireAuth())) {
     return jsonError('Unauthorized', 401);
   }
@@ -74,7 +76,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
 //   1. Require auth.
 //   2. Update the chemical row: isArchived = true.
 //   3. Return { success: true }.
-export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function DELETE(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
+  const params = await paramsPromise;
   if (!(await requireAuth())) {
     return jsonError('Unauthorized', 401);
   }

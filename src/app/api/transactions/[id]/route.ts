@@ -10,7 +10,7 @@ import { editTransaction, deleteTransaction } from '@/lib/balance';
 import { jsonError, jsonOk } from '@/lib/apiHelpers';
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // def PATCH(): Input is one NextRequest (JSON body of the fields being
@@ -24,7 +24,8 @@ interface RouteParams {
 //      know the type ahead of the DB lookup).
 //   3. Call editTransaction(params.id, body).
 //   4. Return the updated row.
-export async function PATCH(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function PATCH(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
+  const params = await paramsPromise;
   if (!(await requireAuth())) {
     return jsonError('Unauthorized', 401);
   }
@@ -49,7 +50,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
 //   1. Require auth.
 //   2. Call deleteTransaction(params.id).
 //   3. Return { success: true }.
-export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function DELETE(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
+  const params = await paramsPromise;
   if (!(await requireAuth())) {
     return jsonError('Unauthorized', 401);
   }

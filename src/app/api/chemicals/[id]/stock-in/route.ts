@@ -9,7 +9,7 @@ import { recordTransaction } from '@/lib/balance';
 import { jsonError, jsonOk } from '@/lib/apiHelpers';
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // def POST(): Input is one NextRequest (JSON body matching StockInInput)
@@ -20,7 +20,8 @@ interface RouteParams {
 //   2. Parse + validate the body with stockInSchema; 400 on failure.
 //   3. Call recordTransaction(params.id, validatedBody, 'STOCK_IN').
 //   4. Return the created row with status 201.
-export async function POST(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function POST(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
+  const params = await paramsPromise;
   if (!(await requireAuth())) {
     return jsonError('Unauthorized', 401);
   }
