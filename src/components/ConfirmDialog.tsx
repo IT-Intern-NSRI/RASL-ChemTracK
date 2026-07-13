@@ -24,11 +24,17 @@ function handleConfirmClick(onConfirm: () => void): void {
 
 export function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogProps) {
   return (
-    <div role="dialog">
-      <h2>{title}</h2>
-      <p>{message}</p>
-      <button onClick={() => handleConfirmClick(onConfirm)}>Confirm</button>
-      <button onClick={onCancel}>Cancel</button>
+    <div className="confirm-overlay">
+      <div className="confirm-panel" role="dialog" aria-modal="true">
+        <h2>{title}</h2>
+        <p>{message}</p>
+        <div>
+          <button onClick={() => handleConfirmClick(onConfirm)}>Confirm</button>
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

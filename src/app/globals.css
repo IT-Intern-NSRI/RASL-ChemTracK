@@ -1,49 +1,488 @@
 /* src/app/globals.css
-   Base global styles. Minimal by design — this project prioritizes a
-   clean, scannable, mobile-friendly ledger UI over decoration. Extend as
-   needed. Fully implemented (no logic to fill in here). */
+   Design system for ChemTrack — a digitized PDEA precursor-chemical
+   register. The visual language borrows from paper ledgers: hairline
+   rules, sharp corners, and a monospace figure column for anything the
+   user needs to audit at a glance (balances, quantities, dates).
+   Two "inks": near-black for structure/body text, deep violet for the
+   brand and interactive elements. STOCK_IN/USAGE/low-stock/overdrawn each
+   get their own ledger-ink color, used as text/border, not fills, so nothing
+   reads as a status-light dashboard. */
 
 :root {
-  --color-bg: #ffffff;
-  --color-text: #1a1a1a;
-  --color-border: #d9d9d9;
-  --color-accent: #2563eb;
-  --color-warn: #b91c1c;
-  --color-stock-in: #15803d;
+  /* Surfaces */
+  --color-bg: #f7f7fb;
+  --color-surface: #ffffff;
+  --color-border: #e3e2ec;
+  --color-border-strong: #cac8db;
+
+  /* Ink */
+  --color-ink: #16151a;
+  --color-ink-muted: #5b5a66;
+  --color-ink-faint: #8b899a;
+
+  /* Brand */
+  --color-accent: #6d28d9;
+  --color-accent-strong: #4c1d95;
+  --color-accent-soft: #f1ebfc;
+
+  /* Ledger inks */
+  --color-stock-in: #146c43;
+  --color-stock-in-soft: #e7f5ec;
   --color-usage: #1d4ed8;
+  --color-usage-soft: #eaf0fe;
+  --color-low-stock: #92400e;
+  --color-low-stock-soft: #fff3dc;
+  --color-warn: #b42318;
+  --color-warn-soft: #fdecea;
+
+  /* Type */
+  --font-display: var(--font-display-family, 'Space Grotesk'), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-family, 'IBM Plex Mono'), ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+  /* Scale */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --shadow-card: 0 1px 2px rgba(20, 20, 30, 0.05), 0 1px 1px rgba(20, 20, 30, 0.04);
+  --shadow-modal: 0 12px 32px rgba(20, 12, 40, 0.18);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-ink);
   background: var(--color-bg);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-2);
+}
+
+h1 {
+  font-size: 1.5rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+}
+
+p {
+  margin: 0 0 var(--space-3);
+  color: var(--color-ink-muted);
 }
 
 a {
   color: var(--color-accent);
+  text-decoration: none;
 }
+
+a:hover {
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Layout shell ---------- */
+
+body > nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+body > nav a {
+  color: var(--color-ink-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+body > nav a:hover {
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+body > main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+
+@media (max-width: 640px) {
+  body > nav {
+    padding: var(--space-3) var(--space-4);
+  }
+  body > main {
+    padding: var(--space-4);
+  }
+}
+
+/* ---------- Wordmark (shared by nav brand + splash) ---------- */
+
+.wordmark {
+  display: inline-flex;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+body > nav a.wordmark {
+  margin-right: auto;
+}
+
+body > nav a.wordmark:hover {
+  text-decoration: none;
+}
+
+.wordmark-chem {
+  color: var(--color-ink);
+}
+
+.wordmark-track {
+  color: var(--color-accent);
+}
+
+/* ---------- Forms ---------- */
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 480px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-ink-muted);
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+input[type='number'],
+input[type='date'] {
+  font-family: var(--font-mono);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-accent);
+}
+
+/* ---------- Buttons ---------- */
+
+button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #fff;
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+button:hover {
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-strong);
+}
+
+button:disabled {
+  background: var(--color-border-strong);
+  border-color: var(--color-border-strong);
+  color: var(--color-ink-faint);
+  cursor: not-allowed;
+}
+
+button[type='button'] {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-color: var(--color-border-strong);
+}
+
+button[type='button']:hover {
+  background: var(--color-bg);
+  border-color: var(--color-ink-faint);
+}
+
+/* ---------- Tables (the register itself) ---------- */
 
 table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 0.9rem;
 }
 
 th,
 td {
   border-bottom: 1px solid var(--color-border);
-  padding: 0.5rem;
+  padding: 0.6rem 0.5rem;
   text-align: left;
 }
 
-[data-low-stock='true'] {
-  background: #fff7e6;
+th {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-muted);
 }
 
-[data-overdrawn='true'] {
-  outline: 2px solid var(--color-warn);
+td {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+tbody tr:hover {
+  background: var(--color-accent-soft);
+}
+
+[data-low-stock='true'] {
+  background: var(--color-low-stock-soft);
+}
+
+[data-low-stock='true'] td:first-child {
+  border-left: 3px solid var(--color-low-stock);
+}
+
+/* ---------- Transaction cards ---------- */
+
+.txn-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.txn-card[data-type='STOCK_IN'] {
+  border-left-color: var(--color-stock-in);
+}
+
+.txn-card[data-type='USAGE'] {
+  border-left-color: var(--color-usage);
+}
+
+.txn-card[data-overdrawn='true'] {
+  border-left-color: var(--color-warn);
+  background: var(--color-warn-soft);
+}
+
+.txn-card__date {
+  color: var(--color-ink-muted);
+  min-width: 5.5rem;
+}
+
+.txn-card__badge {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.txn-card[data-type='STOCK_IN'] .txn-card__badge {
+  color: var(--color-stock-in);
+  background: var(--color-stock-in-soft);
+}
+
+.txn-card[data-type='USAGE'] .txn-card__badge {
+  color: var(--color-usage);
+  background: var(--color-usage-soft);
+}
+
+.txn-card__quantity {
+  font-weight: 600;
+}
+
+.txn-card__balance {
+  margin-left: auto;
+  color: var(--color-ink-muted);
+}
+
+.txn-card__detail {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-muted);
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+/* ---------- Auth / narrow-card pages ---------- */
+
+.auth-shell {
+  min-height: calc(100vh - 64px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.auth-card form {
+  max-width: none;
+}
+
+.auth-card .wordmark {
+  font-size: 1.75rem;
+  margin-bottom: var(--space-2);
+}
+
+/* ---------- Confirm dialog ---------- */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 21, 26, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-4);
+}
+
+.confirm-panel {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-modal);
+  padding: var(--space-5);
+  max-width: 420px;
+  width: 100%;
+}
+
+.confirm-panel h2 {
+  margin-bottom: var(--space-2);
+}
+
+.confirm-panel > div {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* ---------- Toolbar (dashboard filter row) ---------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+/* ---------- Splash screen ---------- */
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  transition: opacity 480ms ease, transform 480ms ease;
+}
+
+.splash--exit {
+  opacity: 0;
+  transform: scale(0.98);
+  pointer-events: none;
+}
+
+.splash__mark {
+  font-size: clamp(2.25rem, 9vw, 4rem);
+}
+
+@keyframes splash-in {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+.wordmark--animated .wordmark-chem,
+.wordmark--animated .wordmark-track {
+  display: inline-block;
+  animation: splash-in 420ms cubic-bezier(0.16, 0.84, 0.44, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash,
+  .wordmark--animated .wordmark-chem,
+  .wordmark--animated .wordmark-track {
+    animation: none !important;
+    transition: none !important;
+  }
 }

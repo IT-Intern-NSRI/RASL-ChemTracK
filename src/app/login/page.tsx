@@ -39,14 +39,26 @@ export default function LoginPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>Chemical Usage Tracker</h1>
-      <label>
-        Password
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      </label>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit">Log in</button>
-    </form>
+    <div className="auth-shell">
+      <div className="auth-card">
+        <h1 className="wordmark">
+          <span className="wordmark-chem">Chem</span>
+          <span className="wordmark-track">Track</span>
+        </h1>
+        <p>Sign in to the register.</p>
+        <form onSubmit={handleSubmit}>
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          {error && <p role="alert">{error}</p>}
+          <button type="submit">Log in</button>
+        </form>
+      </div>
+    </div>
   );
 }

@@ -26,18 +26,30 @@ export function TransactionCard({ transaction, unit, expanded, onToggle }: Trans
   const quantity = isStockIn ? transaction.quantityReceived : transaction.quantityUsed;
 
   return (
-    <div onClick={onToggle} data-overdrawn={transaction.isOverdrawn}>
-      <span>{date}</span>
-      <span>{isStockIn ? 'Stock-In' : 'Usage'}</span>
-      <span>
-        {isStockIn ? '+' : '-'}
-        {quantity} {unit}
-      </span>
-      <span>
-        Balance: {transaction.balanceOut} {unit}
-      </span>
+    <div>
+      <div
+        className="txn-card"
+        onClick={onToggle}
+        data-type={transaction.type}
+        data-overdrawn={transaction.isOverdrawn}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') onToggle();
+        }}
+      >
+        <span className="txn-card__date">{date}</span>
+        <span className="txn-card__badge">{isStockIn ? 'Stock-In' : 'Usage'}</span>
+        <span className="txn-card__quantity">
+          {isStockIn ? '+' : '\u2212'}
+          {quantity} {unit}
+        </span>
+        <span className="txn-card__balance">
+          Bal. {transaction.balanceOut} {unit}
+        </span>
+      </div>
       {expanded && (
-        <div>
+        <div className="txn-card__detail">
           {isStockIn ? (
             <>
               <div>Supplier: {transaction.supplierInfo ?? '—'}</div>

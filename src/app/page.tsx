@@ -1,63 +1,25 @@
-// src/app/page.tsx
+// src/app/chemicals/[id]/log-stock-in/page.tsx
 //
 // PURE FRONTEND FILE — plain description:
-// The main dashboard. Shows a search/filter bar (name search, category
-// dropdown, low-stock-only toggle) above a list/table of every chemical
-// (name, current balance + unit, last activity date), each row linking to
-// its detail page at /chemicals/[id]. Includes an "Add Chemical" button
-// (-> /chemicals/new) and a "Bulk Export" button that opens a date-range
-// picker and downloads a ZIP of every chemical's usage history.
+// Log-stock-in form for one chemical. Fields: Date Received (defaults to
+// today, editable), Supplier Information, Name of trucker/carrier
+// (optional), Lot/Batch No., Quantity Received, and Balance (Out) — shown
+// live as (current balance + quantity received), editable if overridden.
+// Submitting posts the stock-in transaction and returns to the chemical
+// detail page. Uses <StockInForm/> for the field layout.
+//
+// This file is a Server Component so it can `await` the route's params
+// Promise (Next.js 15). The interactive form lives in
+// LogStockInForm.tsx (a Client Component), which receives the resolved
+// id as a plain prop.
 
-import Link from 'next/link';
-import { cookies, headers } from 'next/headers';
-import { ChemicalListTable } from '@/components/ChemicalListTable';
-import { ChemicalSearchFilterBar } from '@/components/ChemicalSearchFilterBar';
-import { ExportButton } from '@/components/ExportButton';
-import { ChemicalSummary } from '@/types';
+import { LogStockInForm } from './LogStockInForm';
 
-interface DashboardPageProps {
-  searchParams: Promise<{ search?: string; category?: string; lowStockOnly?: string }>;
+interface LogStockInPageProps {
+  params: Promise<{ id: string }>;
 }
 
-// def fetchChemicalList(): Input is one DashboardPageProps["searchParams"]
-// object. Output is a Promise resolving to one ChemicalSummary[] array.
-// Pseudocode:
-//   1. Build a query string from the provided filters.
-//   2. Call GET /api/chemicals?<query string> (server-side fetch, since
-//      this is a server component — remember to forward the session
-//      cookie, e.g. via the `cookies()` header, when fetching an internal
-//      API route from a server component).
-//   3. Parse and return the JSON array.
-async function fetchChemicalList(
-  searchParams: Awaited<DashboardPageProps['searchParams']>
-): Promise<ChemicalSummary[]> {
-  const params = new URLSearchParams();
-  if (searchParams.search) params.set('search', searchParams.search);
-  if (searchParams.category) params.set('category', searchParams.category);
-  if (searchParams.lowStockOnly) params.set('lowStockOnly', searchParams.lowStockOnly);
-
-  const host = (await headers()).get('host');
-  const protocol = host?.startsWith('localhost') ? 'http' : 'https';
-
-  const response = await fetch(`${protocol}://${host}/api/chemicals?${params.toString()}`, {
-    headers: { cookie: (await cookies()).toString() },
-    cache: 'no-store',
-  });
-
-  return response.json();
-}
-
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const resolvedSearchParams = await searchParams;
-  const chemicals = await fetchChemicalList(resolvedSearchParams);
-  return (
-    <div>
-      <div>
-        <ChemicalSearchFilterBar />
-        <Link href="/chemicals/new">Add Chemical</Link>
-        <ExportButton mode="bulk" />
-      </div>
-      <ChemicalListTable chemicals={chemicals} />
-    </div>
-  );
+export default async function LogStockInPage({ params }: LogStockInPageProps) {
+  const { id } = await params;
+  return <LogStockInForm chemicalId={id} />;
 }
