@@ -39,15 +39,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="auth-shell">
+    <div className="auth-page">
       <div className="auth-card">
-        <h1 className="wordmark">
-          <span className="wordmark-chem">Chem</span>
-          <span className="wordmark-track">Track</span>
+        <h1>
+          Chem<span style={{ color: 'var(--color-accent)' }}>Track</span>
         </h1>
-        <p>Sign in to the register.</p>
-        <form onSubmit={handleSubmit}>
-          <label>
+        <form onSubmit={handleSubmit} className="form">
+          <label className="field">
             Password
             <input
               type="password"
@@ -56,7 +54,11 @@ export default function LoginPage() {
             />
           </label>
           {error && <p role="alert">{error}</p>}
-          <button type="submit">Log in</button>
+          <div className="form-actions">
+            <button type="submit" className="btn btn-primary">
+              Log in
+            </button>
+          </div>
         </form>
       </div>
     </div>

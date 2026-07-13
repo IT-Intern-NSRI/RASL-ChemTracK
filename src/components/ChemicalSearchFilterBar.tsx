@@ -33,30 +33,26 @@ export function ChemicalSearchFilterBar() {
   }
 
   return (
-    <div>
+    <div className="filter-bar">
       <input
         type="search"
         placeholder="Search chemicals…"
         defaultValue={searchParams.get('search') ?? ''}
         onChange={(e) => handleFilterChange('search', e.target.value)}
       />
-      {/* category <select> and low-stock-only <input type="checkbox">,
-          both wired to handleFilterChange the same way. Category is a
-          free-text field on the Chemical model (no fixed enum), so this
-          is a text filter rather than a fixed dropdown. */}
       <input
         type="text"
         placeholder="Category…"
         defaultValue={searchParams.get('category') ?? ''}
         onChange={(e) => handleFilterChange('category', e.target.value)}
       />
-      <label>
-        Low stock only
+      <label className="field field-checkbox">
         <input
           type="checkbox"
           defaultChecked={searchParams.get('lowStockOnly') === 'true'}
           onChange={(e) => handleFilterChange('lowStockOnly', e.target.checked ? 'true' : '')}
         />
+        Low stock only
       </label>
     </div>
   );

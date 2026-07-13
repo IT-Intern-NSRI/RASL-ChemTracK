@@ -105,32 +105,53 @@ export default function PurgePage() {
   }
 
   return (
-    <div>
-      <h1>Old-Record Cleanup</h1>
-      <p>
-        Removes transactions older than 5 years from the live database,
-        after generating a full backup ZIP of exactly what will be
-        deleted. This must be run manually — nothing is deleted
-        automatically.
-      </p>
-      <button onClick={handlePrepare}>Prepare &amp; Download Backup</button>
-      {summary && (
-        <div>
-          <p>Cutoff date: {String(summary.cutoffDate)}</p>
-          <p>Chemicals affected: {String(summary.chemicalsAffected)}</p>
-          <p>Total rows to delete: {String(summary.totalRowsToDelete)}</p>
-          <ul>
-            {(summary.perChemical as Array<Record<string, unknown>>)?.map((row) => (
-              <li key={String(row.chemicalId)}>
-                {String(row.chemicalName)}: {String(row.rowsToDelete)} row(s)
-              </li>
-            ))}
-          </ul>
-          <button onClick={handleConfirm} disabled={!purgeToken}>
-            Confirm Deletion
+    <div className="page page--narrow">
+      <div className="page-header">
+        <h1>Old-Record Cleanup</h1>
+      </div>
+      <div className="card">
+        <p>
+          Removes transactions older than 5 years from the live database,
+          after generating a full backup ZIP of exactly what will be
+          deleted. This must be run manually — nothing is deleted
+          automatically.
+        </p>
+        <div className="form-actions">
+          <button onClick={handlePrepare} className="btn btn-primary">
+            Prepare &amp; Download Backup
           </button>
         </div>
-      )}
+        {summary && (
+          <div>
+            <h2>Purge Plan</h2>
+            <p>Cutoff date: {String(summary.cutoffDate)}</p>
+            <p>Chemicals affected: {String(summary.chemicalsAffected)}</p>
+            <p>Total rows to delete: {String(summary.totalRowsToDelete)}</p>
+            <ul className="summary-list">
+              {(summary.perChemical as Array<Record<string, unknown>>)?.map((row) => (
+                <li key={String(row.chemicalId)}>
+                  {String(row.chemicalName)}: {String(row.rowsToDelete)} row(s)
+                </li>
+              ))}
+            </ul>
+            <div className="form-actions">
+              <button onClick={handleConfirm} disabled={!purgeToken} className="btn btn-danger">
+                Confirm Deletion
+              </button>
+            </div>
+          </div>
+        )}
+        {result && (
+          <div>
+            <h2>Purge Complete</h2>
+            <p>Purge completed at {String(result.performedAt)}.</p>
+            <p>Cutoff date: {String(result.cutoffDate)}</p>
+            <p>Chemicals affected: {String(result.chemicalsAffected)}</p>
+            <p>Total rows deleted: {String(result.totalRowsToDelete)}</p>
+          </div>
+        )}
+        {error && <p role="alert">{error}</p>}
+      </div>
       {confirmingDeletion && (
         <ConfirmDialog
           title="Delete these records?"
@@ -142,15 +163,6 @@ export default function PurgePage() {
           onCancel={() => setConfirmingDeletion(false)}
         />
       )}
-      {result && (
-        <div>
-          <p>Purge completed at {String(result.performedAt)}.</p>
-          <p>Cutoff date: {String(result.cutoffDate)}</p>
-          <p>Chemicals affected: {String(result.chemicalsAffected)}</p>
-          <p>Total rows deleted: {String(result.totalRowsToDelete)}</p>
-        </div>
-      )}
-      {error && <p role="alert">{error}</p>}
     </div>
   );
 }

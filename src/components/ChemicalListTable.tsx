@@ -39,14 +39,15 @@ export function ChemicalListTable({ chemicals }: ChemicalListTableProps) {
       <tbody>
         {chemicals.map((chemical) => (
           <tr key={chemical.id} data-low-stock={isLowStock(chemical)}>
-            <td>
+            <td data-label="Name">
               <Link href={`/chemicals/${chemical.id}`}>{chemical.name}</Link>
+              {isLowStock(chemical) && <span className="badge badge-low-stock"> Low stock</span>}
             </td>
-            <td>{chemical.category ?? '—'}</td>
-            <td>
+            <td data-label="Category">{chemical.category ?? '—'}</td>
+            <td data-label="Current Balance">
               {chemical.currentBalance} {chemical.unit}
             </td>
-            <td>{chemical.lastActivityDate ?? '—'}</td>
+            <td data-label="Last Activity">{chemical.lastActivityDate ?? '—'}</td>
           </tr>
         ))}
       </tbody>

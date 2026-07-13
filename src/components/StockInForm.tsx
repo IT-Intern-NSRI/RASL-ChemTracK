@@ -103,12 +103,13 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
 
   return (
     <form
+      className="form"
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit(buildPayload());
       }}
     >
-      <label>
+      <label className="field">
         Date Received
         <input
           type="date"
@@ -116,7 +117,7 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
           onChange={(e) => handleChange('dateReceived', e.target.value)}
         />
       </label>
-      <label>
+      <label className="field">
         Supplier Information
         <input
           type="text"
@@ -125,7 +126,7 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
           required
         />
       </label>
-      <label>
+      <label className="field">
         Name of trucker/carrier
         <input
           type="text"
@@ -133,7 +134,7 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
           onChange={(e) => handleChange('truckerCarrier', e.target.value)}
         />
       </label>
-      <label>
+      <label className="field">
         Lot/Batch No.
         <input
           type="text"
@@ -142,7 +143,7 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
           required
         />
       </label>
-      <label>
+      <label className="field">
         Quantity Received
         <input
           type="number"
@@ -152,7 +153,7 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
           required
         />
       </label>
-      <label>
+      <label className="field">
         Balance (Out)
         <input
           type="number"
@@ -161,7 +162,11 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
           onChange={(e) => handleChange('balanceOut', e.target.value)}
         />
       </label>
-      <button type="submit">Log Stock-In</button>
+      <div className="form-actions">
+        <button type="submit" className="btn btn-primary">
+          Log Stock-In
+        </button>
+      </div>
     </form>
   );
 }

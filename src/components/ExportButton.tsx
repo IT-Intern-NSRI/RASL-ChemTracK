@@ -77,12 +77,18 @@ export function ExportButton({ mode, chemicalId }: ExportButtonProps) {
   }
 
   return (
-    <div>
-      <button onClick={() => setOpen(true)}>Export</button>
+    <div className="export">
+      <button onClick={() => setOpen(true)} className="btn btn-secondary">
+        Export
+      </button>
       {open && (
-        <div>
+        <div className="export__popover">
           <DateRangePicker onChange={setRange} />
-          <button onClick={handleExport} disabled={!range?.startDate || !range?.endDate}>
+          <button
+            onClick={handleExport}
+            disabled={!range?.startDate || !range?.endDate}
+            className="btn btn-primary btn-sm"
+          >
             Download
           </button>
         </div>

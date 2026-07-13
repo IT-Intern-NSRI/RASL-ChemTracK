@@ -61,60 +61,74 @@ export default function SettingsPage() {
     }
   }
 
-  if (!form) return <p>Loading…</p>;
+  if (!form) return <p className="loading-state">Loading…</p>;
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>Settings</h1>
-      <label>
-        Organization Name
-        <input
-          type="text"
-          value={(form.organizationName as string) ?? ''}
-          onChange={(e) => setForm({ ...form, organizationName: e.target.value })}
-        />
-      </label>
-      <label>
-        Register Label
-        <input
-          type="text"
-          value={(form.registerLabel as string) ?? ''}
-          onChange={(e) => setForm({ ...form, registerLabel: e.target.value })}
-        />
-      </label>
-      <label>
-        Signatory Name
-        <input
-          type="text"
-          value={(form.signatoryName as string) ?? ''}
-          onChange={(e) => setForm({ ...form, signatoryName: e.target.value })}
-        />
-      </label>
-      <label>
-        Signatory Credentials
-        <input
-          type="text"
-          value={(form.signatoryCredentials as string) ?? ''}
-          onChange={(e) => setForm({ ...form, signatoryCredentials: e.target.value })}
-        />
-      </label>
-      <label>
-        Signatory Title
-        <input
-          type="text"
-          value={(form.signatoryTitle as string) ?? ''}
-          onChange={(e) => setForm({ ...form, signatoryTitle: e.target.value })}
-        />
-      </label>
-      <label>
-        New password (leave blank to keep current)
-        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-      </label>
-      {message && <p>{message}</p>}
-      <button type="submit">Save</button>
+    <div className="page page--narrow">
+      <div className="page-header">
+        <h1>Settings</h1>
+      </div>
+      <div className="card">
+        <form onSubmit={handleSubmit} className="form">
+          <label className="field">
+            Organization Name
+            <input
+              type="text"
+              value={(form.organizationName as string) ?? ''}
+              onChange={(e) => setForm({ ...form, organizationName: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Register Label
+            <input
+              type="text"
+              value={(form.registerLabel as string) ?? ''}
+              onChange={(e) => setForm({ ...form, registerLabel: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Signatory Name
+            <input
+              type="text"
+              value={(form.signatoryName as string) ?? ''}
+              onChange={(e) => setForm({ ...form, signatoryName: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Signatory Credentials
+            <input
+              type="text"
+              value={(form.signatoryCredentials as string) ?? ''}
+              onChange={(e) => setForm({ ...form, signatoryCredentials: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Signatory Title
+            <input
+              type="text"
+              value={(form.signatoryTitle as string) ?? ''}
+              onChange={(e) => setForm({ ...form, signatoryTitle: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            New password (leave blank to keep current)
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </label>
+          {message && <p className="form-message">{message}</p>}
+          <div className="form-actions">
+            <button type="submit" className="btn btn-primary">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
       <p>
         <Link href="/admin/purge">Old-record cleanup →</Link>
       </p>
-    </form>
+    </div>
   );
 }

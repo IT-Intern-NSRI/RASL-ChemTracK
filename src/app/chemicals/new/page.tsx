@@ -60,53 +60,63 @@ export default function NewChemicalPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>Add Chemical</h1>
-      <label>
-        Name
-        <input
-          type="text"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          required
-        />
-      </label>
-      <label>
-        CPECS Descriptor
-        <input
-          type="text"
-          value={form.cpecsDescriptor}
-          onChange={(e) => setForm({ ...form, cpecsDescriptor: e.target.value })}
-          required
-        />
-      </label>
-      <label>
-        Category
-        <input
-          type="text"
-          value={form.category}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
-        />
-      </label>
-      <label>
-        Unit
-        <input
-          type="text"
-          value={form.unit}
-          onChange={(e) => setForm({ ...form, unit: e.target.value })}
-        />
-      </label>
-      <label>
-        Low-stock threshold
-        <input
-          type="number"
-          step="any"
-          value={form.lowStockThreshold}
-          onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })}
-        />
-      </label>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit">Create</button>
-    </form>
+    <div className="page page--narrow">
+      <div className="page-header">
+        <h1>Add Chemical</h1>
+      </div>
+      <div className="card">
+        <form onSubmit={handleSubmit} className="form">
+          <label className="field">
+            Name
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+          </label>
+          <label className="field">
+            CPECS Descriptor
+            <input
+              type="text"
+              value={form.cpecsDescriptor}
+              onChange={(e) => setForm({ ...form, cpecsDescriptor: e.target.value })}
+              required
+            />
+          </label>
+          <label className="field">
+            Category
+            <input
+              type="text"
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Unit
+            <input
+              type="text"
+              value={form.unit}
+              onChange={(e) => setForm({ ...form, unit: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Low-stock threshold
+            <input
+              type="number"
+              step="any"
+              value={form.lowStockThreshold}
+              onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })}
+            />
+          </label>
+          {error && <p role="alert">{error}</p>}
+          <div className="form-actions">
+            <button type="submit" className="btn btn-primary">
+              Create
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

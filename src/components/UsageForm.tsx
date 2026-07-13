@@ -89,12 +89,13 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
 
   return (
     <form
+      className="form"
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit(buildPayload());
       }}
     >
-      <label>
+      <label className="field">
         Date Used
         <input
           type="date"
@@ -102,7 +103,7 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
           onChange={(e) => handleChange('dateUsed', e.target.value)}
         />
       </label>
-      <label>
+      <label className="field">
         Details of Usage
         <input
           type="text"
@@ -111,7 +112,7 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
           required
         />
       </label>
-      <label>
+      <label className="field">
         Work Order No.
         <input
           type="text"
@@ -119,7 +120,7 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
           onChange={(e) => handleChange('workOrderNo', e.target.value)}
         />
       </label>
-      <label>
+      <label className="field">
         Lot/Batch No. of used CPECS
         <input
           type="text"
@@ -127,7 +128,7 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
           onChange={(e) => handleChange('lotBatchNoUsed', e.target.value)}
         />
       </label>
-      <label>
+      <label className="field">
         Quantity Used
         <input
           type="number"
@@ -137,7 +138,7 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
           required
         />
       </label>
-      <label>
+      <label className="field">
         Balance (Out)
         <input
           type="number"
@@ -146,7 +147,11 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
           onChange={(e) => handleChange('balanceOut', e.target.value)}
         />
       </label>
-      <button type="submit">Log Usage</button>
+      <div className="form-actions">
+        <button type="submit" className="btn btn-primary">
+          Log Usage
+        </button>
+      </div>
     </form>
   );
 }

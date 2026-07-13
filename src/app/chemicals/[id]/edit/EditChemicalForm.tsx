@@ -57,59 +57,73 @@ export function EditChemicalForm({ chemicalId }: EditChemicalFormProps) {
     }
   }
 
-  if (!form) return <p>Loading…</p>;
+  if (!form) return <p className="loading-state">Loading…</p>;
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>Edit Chemical</h1>
-      <label>
-        Name
-        <input
-          type="text"
-          value={(form.name as string) ?? ''}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          required
-        />
-      </label>
-      <label>
-        CPECS Descriptor
-        <input
-          type="text"
-          value={(form.cpecsDescriptor as string) ?? ''}
-          onChange={(e) => setForm({ ...form, cpecsDescriptor: e.target.value })}
-          required
-        />
-      </label>
-      <label>
-        Category
-        <input
-          type="text"
-          value={(form.category as string) ?? ''}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
-        />
-      </label>
-      <label>
-        Unit
-        <input
-          type="text"
-          value={(form.unit as string) ?? ''}
-          onChange={(e) => setForm({ ...form, unit: e.target.value })}
-        />
-      </label>
-      <label>
-        Low-stock threshold
-        <input
-          type="number"
-          step="any"
-          value={(form.lowStockThreshold as number | string) ?? ''}
-          onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })}
-        />
-      </label>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit">Save</button>
-      <button type="button" onClick={() => setConfirmingArchive(true)}>
-        Archive this chemical
-      </button>
+    <div className="page page--narrow">
+      <div className="page-header">
+        <h1>Edit Chemical</h1>
+      </div>
+      <div className="card">
+        <form onSubmit={handleSubmit} className="form">
+          <label className="field">
+            Name
+            <input
+              type="text"
+              value={(form.name as string) ?? ''}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+          </label>
+          <label className="field">
+            CPECS Descriptor
+            <input
+              type="text"
+              value={(form.cpecsDescriptor as string) ?? ''}
+              onChange={(e) => setForm({ ...form, cpecsDescriptor: e.target.value })}
+              required
+            />
+          </label>
+          <label className="field">
+            Category
+            <input
+              type="text"
+              value={(form.category as string) ?? ''}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Unit
+            <input
+              type="text"
+              value={(form.unit as string) ?? ''}
+              onChange={(e) => setForm({ ...form, unit: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Low-stock threshold
+            <input
+              type="number"
+              step="any"
+              value={(form.lowStockThreshold as number | string) ?? ''}
+              onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })}
+            />
+          </label>
+          {error && <p role="alert">{error}</p>}
+          <div className="form-actions">
+            <button type="submit" className="btn btn-primary">
+              Save
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => setConfirmingArchive(true)}
+            >
+              Archive this chemical
+            </button>
+          </div>
+        </form>
+      </div>
       {confirmingArchive && (
         <ConfirmDialog
           title="Archive this chemical?"
@@ -121,6 +135,6 @@ export function EditChemicalForm({ chemicalId }: EditChemicalFormProps) {
           onCancel={() => setConfirmingArchive(false)}
         />
       )}
-    </form>
+    </div>
   );
 }

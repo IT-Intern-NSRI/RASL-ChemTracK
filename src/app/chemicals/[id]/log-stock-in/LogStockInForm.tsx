@@ -37,10 +37,14 @@ export function LogStockInForm({ chemicalId }: LogStockInFormProps) {
   }
 
   return (
-    <div>
-      <h1>Log Stock-In</h1>
-      <StockInForm chemicalId={chemicalId} onSubmit={handleSubmit} />
-      {error && <p role="alert">{error}</p>}
+    <div className="page page--narrow">
+      <div className="page-header">
+        <h1>Log Stock-In</h1>
+      </div>
+      <div className="card">
+        <StockInForm chemicalId={chemicalId} onSubmit={handleSubmit} />
+        {error && <p role="alert">{error}</p>}
+      </div>
     </div>
   );
 }

@@ -31,7 +31,10 @@ export function UsageHistoryList({ transactions, unit }: UsageHistoryListProps) 
   }
 
   return (
-    <div>
+    <div className="tx-list">
+      {transactions.length === 0 && (
+        <div className="empty-state">No transactions in this range yet.</div>
+      )}
       {transactions.map((transaction) => (
         <TransactionCard
           key={transaction.id}

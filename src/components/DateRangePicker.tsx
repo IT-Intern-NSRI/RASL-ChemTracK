@@ -33,29 +33,31 @@ export function DateRangePicker({ onChange }: DateRangePickerProps) {
   const valid = validateRange(startDate, endDate);
 
   return (
-    <div>
-      <label>
-        Start
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => {
-            setStartDate(e.target.value);
-            onChange({ startDate: e.target.value, endDate });
-          }}
-        />
-      </label>
-      <label>
-        End
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => {
-            setEndDate(e.target.value);
-            onChange({ startDate, endDate: e.target.value });
-          }}
-        />
-      </label>
+    <div className="date-range">
+      <div className="date-range__row">
+        <label className="field">
+          Start
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => {
+              setStartDate(e.target.value);
+              onChange({ startDate: e.target.value, endDate });
+            }}
+          />
+        </label>
+        <label className="field">
+          End
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => {
+              setEndDate(e.target.value);
+              onChange({ startDate, endDate: e.target.value });
+            }}
+          />
+        </label>
+      </div>
       {!valid && <p role="alert">Start date must be before end date.</p>}
     </div>
   );

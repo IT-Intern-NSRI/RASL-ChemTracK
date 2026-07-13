@@ -37,10 +37,14 @@ export function LogUsageForm({ chemicalId }: LogUsageFormProps) {
   }
 
   return (
-    <div>
-      <h1>Log Usage</h1>
-      <UsageForm chemicalId={chemicalId} onSubmit={handleSubmit} />
-      {error && <p role="alert">{error}</p>}
+    <div className="page page--narrow">
+      <div className="page-header">
+        <h1>Log Usage</h1>
+      </div>
+      <div className="card">
+        <UsageForm chemicalId={chemicalId} onSubmit={handleSubmit} />
+        {error && <p role="alert">{error}</p>}
+      </div>
     </div>
   );
 }

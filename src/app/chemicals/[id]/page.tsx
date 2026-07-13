@@ -1,81 +1,109 @@
 // src/app/chemicals/[id]/page.tsx
 //
 // PURE FRONTEND FILE — plain description:
-// The chemical detail page. Shows the chemical's name/CPECS descriptor,
-// current balance, links to Log Stock-In / Log Usage / Edit, a
-// single-chemical <ExportButton mode="single"/>, and the
-// <UsageHistoryList/> of its transactions (most recent 25, newest
-// first — the same data the /api/chemicals/[id]/history endpoint
-// serves, fetched directly here for the initial render).
-//
-// This file is a Server Component so it can `await` the route's params
-// Promise (Next.js 15) and query the database directly.
+// The chemical detail / usage history page. Header shows the chemical's
+// name, CPECS descriptor, current balance + unit, and buttons: "Log
+// Usage" (-> /chemicals/[id]/log-usage), "Log Stock-In"
+// (-> /chemicals/[id]/log-stock-in), "Export" (opens a date-range picker,
+// downloads this chemical's PDF), and "Edit" (-> /chemicals/[id]/edit).
+// Below that, a date-range filter, then <UsageHistoryList/> rendering the
+// mobile-optimized, newest-first card list of stock-in/usage instances.
 
-import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth';
-import { ExportButton } from '@/components/ExportButton';
+import { notFound } from 'next/navigation';
+import { cookies, headers } from 'next/headers';
+import { ChemicalSummary, TransactionDTO } from '@/types';
 import { UsageHistoryList } from '@/components/UsageHistoryList';
-import { TransactionDTO } from '@/types';
+import { ExportButton } from '@/components/ExportButton';
 
 interface ChemicalDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ startDate?: string; endDate?: string; page?: string }>;
 }
 
-export default async function ChemicalDetailPage({ params }: ChemicalDetailPageProps) {
-  if (!(await requireAuth())) {
-    redirect('/login');
-  }
+// def fetchChemicalDetail(): Input is one chemical id (string). Output is
+// a Promise resolving to one ChemicalSummary (or triggers Next.js's
+// notFound() if it doesn't exist).
+// Pseudocode:
+//   1. Call GET /api/chemicals/[id] (server-side fetch).
+//   2. If the response is a 404, call notFound() from next/navigation.
+//   3. Parse and return the JSON.
+async function fetchChemicalDetail(id: string): Promise<ChemicalSummary> {
+  const host = (await headers()).get('host');
+  const protocol = host?.startsWith('localhost') ? 'http' : 'https';
 
-  const { id } = await params;
+  const response = await fetch(`${protocol}://${host}/api/chemicals/${id}`, {
+    headers: { cookie: (await cookies()).toString() },
+    cache: 'no-store',
+  });
 
-  const chemical = await prisma.chemical.findUnique({ where: { id } });
-  if (!chemical) {
+  if (response.status === 404) {
     notFound();
   }
 
-  const transactions = await prisma.transaction.findMany({
-    where: { chemicalId: id },
-    orderBy: { sequenceNo: 'desc' },
-    take: 25,
-  });
+  return response.json();
+}
 
-  const transactionDTOs: TransactionDTO[] = transactions.map((t) => ({
-    id: t.id,
-    chemicalId: t.chemicalId,
-    type: t.type,
-    sequenceNo: t.sequenceNo,
-    dateReceived: t.dateReceived ? t.dateReceived.toISOString().slice(0, 10) : null,
-    supplierInfo: t.supplierInfo,
-    truckerCarrier: t.truckerCarrier,
-    lotBatchNo: t.lotBatchNo,
-    quantityReceived: t.quantityReceived !== null ? Number(t.quantityReceived) : null,
-    dateUsed: t.dateUsed ? t.dateUsed.toISOString().slice(0, 10) : null,
-    detailsOfUsage: t.detailsOfUsage,
-    workOrderNo: t.workOrderNo,
-    lotBatchNoUsed: t.lotBatchNoUsed,
-    quantityUsed: t.quantityUsed !== null ? Number(t.quantityUsed) : null,
-    balanceOut: Number(t.balanceOut),
-    balanceOverridden: t.balanceOverridden,
-    isOverdrawn: t.isOverdrawn,
-    isAnchor: t.isAnchor,
-  }));
+// def fetchHistory(): Input is one chemical id (string) and one filters
+// object ({ startDate?, endDate?, page? }). Output is a Promise resolving
+// to { items: TransactionDTO[], total: number }.
+// Pseudocode:
+//   1. Build a query string from the filters.
+//   2. Call GET /api/chemicals/[id]/history?<query string>.
+//   3. Parse and return the JSON.
+async function fetchHistory(
+  id: string,
+  filters: Awaited<ChemicalDetailPageProps['searchParams']>
+): Promise<{ items: TransactionDTO[]; total: number }> {
+  const params = new URLSearchParams();
+  if (filters.startDate) params.set('startDate', filters.startDate);
+  if (filters.endDate) params.set('endDate', filters.endDate);
+  if (filters.page) params.set('page', filters.page);
+
+  const host = (await headers()).get('host');
+  const protocol = host?.startsWith('localhost') ? 'http' : 'https';
+
+  const response = await fetch(
+    `${protocol}://${host}/api/chemicals/${id}/history?${params.toString()}`,
+    {
+      headers: { cookie: (await cookies()).toString() },
+      cache: 'no-store',
+    }
+  );
+
+  return response.json();
+}
+
+export default async function ChemicalDetailPage({ params, searchParams }: ChemicalDetailPageProps) {
+  const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
+  const chemical = await fetchChemicalDetail(resolvedParams.id);
+  const history = await fetchHistory(resolvedParams.id, resolvedSearchParams);
 
   return (
-    <div>
-      <h1>{chemical.name}</h1>
-      <p>{chemical.cpecsDescriptor}</p>
-      <p>
-        Current Balance: {Number(chemical.currentBalance)} {chemical.unit}
-      </p>
-      <div>
-        <Link href={`/chemicals/${id}/log-stock-in`}>Log Stock-In</Link>
-        <Link href={`/chemicals/${id}/log-usage`}>Log Usage</Link>
-        <Link href={`/chemicals/${id}/edit`}>Edit</Link>
-        <ExportButton mode="single" chemicalId={id} />
-      </div>
-      <UsageHistoryList transactions={transactionDTOs} unit={chemical.unit} />
+    <div className="page">
+      <header className="page-header">
+        <div>
+          <h1>{chemical.name}</h1>
+          <p className="page-header__meta">{chemical.cpecsDescriptor}</p>
+          <p className="balance-figure">
+            Current balance: {chemical.currentBalance} {chemical.unit}
+          </p>
+        </div>
+        <div className="toolbar">
+          <Link href={`/chemicals/${chemical.id}/log-usage`} className="btn btn-secondary">
+            Log Usage
+          </Link>
+          <Link href={`/chemicals/${chemical.id}/log-stock-in`} className="btn btn-secondary">
+            Log Stock-In
+          </Link>
+          <ExportButton mode="single" chemicalId={chemical.id} />
+          <Link href={`/chemicals/${chemical.id}/edit`} className="btn btn-ghost">
+            Edit
+          </Link>
+        </div>
+      </header>
+      <UsageHistoryList transactions={history.items} unit={chemical.unit} />
     </div>
   );
 }

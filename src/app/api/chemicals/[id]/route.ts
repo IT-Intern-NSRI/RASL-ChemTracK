@@ -1,8 +1,8 @@
 // src/app/api/chemicals/[id]/route.ts
 //
-// GET -> a single chemical's metadata (for the detail/edit pages).
-// PATCH -> update a chemical's metadata.
-// DELETE -> archive (soft-delete) a chemical.
+// GET    -> a single chemical's metadata.
+// PATCH  -> edit a chemical's metadata.
+// DELETE -> soft-delete (archive) a chemical.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -14,12 +14,14 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// def GET(): Input is the chemical id route param. Output is a Promise
-// resolving to the Chemical row (404 if not found).
+// def GET(): Input is one NextRequest and one route param (chemical id).
+// Output is a Promise resolving to one NextResponse with the chemical
+// row, or a 404 if it doesn't exist.
 // Pseudocode:
 //   1. Require auth.
-//   2. Look up the chemical by id.
-//   3. 404 if not found, else return it.
+//   2. Fetch the chemical by id via Prisma.
+//   3. If not found, return 404 via jsonError.
+//   4. Return the row via jsonOk.
 export async function GET(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
   const params = await paramsPromise;
   if (!(await requireAuth())) {
@@ -34,15 +36,13 @@ export async function GET(request: NextRequest, { params: paramsPromise }: Route
   return jsonOk(chemical);
 }
 
-// def PATCH(): Input is one NextRequest (JSON body matching a partial
+// def PATCH(): Input is one NextRequest (JSON body matching
 // ChemicalUpdateInput) and the chemical id route param. Output is a
-// Promise resolving to the updated Chemical row.
+// Promise resolving to the updated chemical row.
 // Pseudocode:
 //   1. Require auth.
-//   2. Parse + validate the body with chemicalUpdateSchema; 400 on
-//      failure.
-//   3. Update the chemical row with the validated fields; 404 if it
-//      doesn't exist.
+//   2. Validate the body with chemicalUpdateSchema (all fields optional).
+//   3. Update the chemical row via Prisma; 404 if it doesn't exist.
 //   4. Return the updated row.
 export async function PATCH(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
   const params = await paramsPromise;
@@ -69,24 +69,17 @@ export async function PATCH(request: NextRequest, { params: paramsPromise }: Rou
   return jsonOk(updated);
 }
 
-// def DELETE(): Input is the chemical id route param. Output is a
-// Promise resolving to an empty success response. This is a soft-delete
-// (sets isArchived = true) — nothing is ever hard-deleted except via the
-// manual 5-year purge, per project decision.
+// def DELETE(): Input is one NextRequest and the chemical id route param.
+// Output is a Promise resolving to { success: true }. Never hard-deletes
+// — sets isArchived = true so exportable history is preserved.
 // Pseudocode:
 //   1. Require auth.
-//   2. Set isArchived = true on the chemical row; 404 if it doesn't
-//      exist.
-//   3. Return success.
+//   2. Update the chemical row: isArchived = true.
+//   3. Return { success: true }.
 export async function DELETE(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
   const params = await paramsPromise;
   if (!(await requireAuth())) {
     return jsonError('Unauthorized', 401);
-  }
-
-  const existing = await prisma.chemical.findUnique({ where: { id: params.id } });
-  if (!existing) {
-    return jsonError('Chemical not found', 404);
   }
 
   await prisma.chemical.update({

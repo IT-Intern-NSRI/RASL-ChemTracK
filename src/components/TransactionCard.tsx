@@ -26,41 +26,45 @@ export function TransactionCard({ transaction, unit, expanded, onToggle }: Trans
   const quantity = isStockIn ? transaction.quantityReceived : transaction.quantityUsed;
 
   return (
-    <div>
-      <div
-        className="txn-card"
-        onClick={onToggle}
-        data-type={transaction.type}
-        data-overdrawn={transaction.isOverdrawn}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') onToggle();
-        }}
-      >
-        <span className="txn-card__date">{date}</span>
-        <span className="txn-card__badge">{isStockIn ? 'Stock-In' : 'Usage'}</span>
-        <span className="txn-card__quantity">
-          {isStockIn ? '+' : '\u2212'}
+    <div className="tx-card" onClick={onToggle} data-overdrawn={transaction.isOverdrawn}>
+      <div className="tx-card__row">
+        <span className="tx-card__date">{date}</span>
+        <span className={`badge ${isStockIn ? 'badge-stock-in' : 'badge-usage'}`}>
+          {isStockIn ? 'Stock-In' : 'Usage'}
+        </span>
+        <span className={`tx-card__qty ${isStockIn ? 'tx-card__qty--in' : 'tx-card__qty--out'}`}>
+          {isStockIn ? '+' : '-'}
           {quantity} {unit}
         </span>
-        <span className="txn-card__balance">
-          Bal. {transaction.balanceOut} {unit}
+        <span className="tx-card__balance">
+          Balance: {transaction.balanceOut} {unit}
         </span>
       </div>
       {expanded && (
-        <div className="txn-card__detail">
+        <div className="tx-card__details">
           {isStockIn ? (
             <>
-              <div>Supplier: {transaction.supplierInfo ?? '—'}</div>
-              <div>Trucker/Carrier: {transaction.truckerCarrier ?? '—'}</div>
-              <div>Lot/Batch No.: {transaction.lotBatchNo ?? '—'}</div>
+              <div>
+                <strong>Supplier:</strong> {transaction.supplierInfo ?? '—'}
+              </div>
+              <div>
+                <strong>Trucker/Carrier:</strong> {transaction.truckerCarrier ?? '—'}
+              </div>
+              <div>
+                <strong>Lot/Batch No.:</strong> {transaction.lotBatchNo ?? '—'}
+              </div>
             </>
           ) : (
             <>
-              <div>Details of Usage: {transaction.detailsOfUsage ?? '—'}</div>
-              <div>Work Order No.: {transaction.workOrderNo ?? '—'}</div>
-              <div>Lot/Batch No. used: {transaction.lotBatchNoUsed ?? '—'}</div>
+              <div>
+                <strong>Details of Usage:</strong> {transaction.detailsOfUsage ?? '—'}
+              </div>
+              <div>
+                <strong>Work Order No.:</strong> {transaction.workOrderNo ?? '—'}
+              </div>
+              <div>
+                <strong>Lot/Batch No. used:</strong> {transaction.lotBatchNoUsed ?? '—'}
+              </div>
             </>
           )}
         </div>
