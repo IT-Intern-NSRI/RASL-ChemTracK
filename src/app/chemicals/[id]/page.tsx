@@ -17,8 +17,8 @@ import { UsageHistoryList } from '@/components/UsageHistoryList';
 import { ExportButton } from '@/components/ExportButton';
 
 interface ChemicalDetailPageProps {
-  params: { id: string };
-  searchParams: { startDate?: string; endDate?: string; page?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ startDate?: string; endDate?: string; page?: string }>;
 }
 
 // def fetchChemicalDetail(): Input is one chemical id (string). Output is
@@ -53,7 +53,7 @@ async function fetchChemicalDetail(id: string): Promise<ChemicalSummary> {
 //   3. Parse and return the JSON.
 async function fetchHistory(
   id: string,
-  filters: ChemicalDetailPageProps['searchParams']
+  filters: Awaited<ChemicalDetailPageProps['searchParams']>
 ): Promise<{ items: TransactionDTO[]; total: number }> {
   const params = new URLSearchParams();
   if (filters.startDate) params.set('startDate', filters.startDate);
@@ -75,8 +75,10 @@ async function fetchHistory(
 }
 
 export default async function ChemicalDetailPage({ params, searchParams }: ChemicalDetailPageProps) {
-  const chemical = await fetchChemicalDetail(params.id);
-  const history = await fetchHistory(params.id, searchParams);
+  const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
+  const chemical = await fetchChemicalDetail(resolvedParams.id);
+  const history = await fetchHistory(resolvedParams.id, resolvedSearchParams);
 
   return (
     <div>

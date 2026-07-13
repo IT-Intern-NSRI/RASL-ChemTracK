@@ -8,49 +8,18 @@
 // they want to override it. Submitting posts the usage transaction and
 // returns to the chemical detail page. Uses <UsageForm/> for the field
 // layout.
+//
+// This file is a Server Component so it can `await` the route's params
+// Promise (Next.js 15). The interactive form lives in LogUsageForm.tsx
+// (a Client Component), which receives the resolved id as a plain prop.
 
-'use client';
-
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { UsageForm } from '@/components/UsageForm';
+import { LogUsageForm } from './LogUsageForm';
 
 interface LogUsagePageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export default function LogUsagePage({ params }: LogUsagePageProps) {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-
-  // def handleSubmit(): Input is one usage form payload (matching
-  // UsageInput). Output is none (side effect: POSTs to
-  // /api/chemicals/[id]/usage, then navigates back to the chemical detail
-  // page on success, or sets `error` on failure).
-  // Pseudocode:
-  //   1. POST `payload` as JSON to /api/chemicals/${params.id}/usage.
-  //   2. If response.ok, router.push(`/chemicals/${params.id}`).
-  //   3. Else, set error from the response body.
-  async function handleSubmit(payload: unknown): Promise<void> {
-    const response = await fetch(`/api/chemicals/${params.id}/usage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (response.ok) {
-      router.push(`/chemicals/${params.id}`);
-    } else {
-      const body = await response.json().catch(() => null);
-      setError(body?.error ?? 'Failed to log usage');
-    }
-  }
-
-  return (
-    <div>
-      <h1>Log Usage</h1>
-      <UsageForm chemicalId={params.id} onSubmit={handleSubmit} />
-      {error && <p role="alert">{error}</p>}
-    </div>
-  );
+export default async function LogUsagePage({ params }: LogUsagePageProps) {
+  const { id } = await params;
+  return <LogUsageForm chemicalId={id} />;
 }

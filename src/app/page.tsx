@@ -16,7 +16,7 @@ import { ExportButton } from '@/components/ExportButton';
 import { ChemicalSummary } from '@/types';
 
 interface DashboardPageProps {
-  searchParams: { search?: string; category?: string; lowStockOnly?: string };
+  searchParams: Promise<{ search?: string; category?: string; lowStockOnly?: string }>;
 }
 
 // def fetchChemicalList(): Input is one DashboardPageProps["searchParams"]
@@ -29,7 +29,7 @@ interface DashboardPageProps {
 //      API route from a server component).
 //   3. Parse and return the JSON array.
 async function fetchChemicalList(
-  searchParams: DashboardPageProps['searchParams']
+  searchParams: Awaited<DashboardPageProps['searchParams']>
 ): Promise<ChemicalSummary[]> {
   const params = new URLSearchParams();
   if (searchParams.search) params.set('search', searchParams.search);
@@ -48,7 +48,8 @@ async function fetchChemicalList(
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const chemicals = await fetchChemicalList(searchParams);
+  const resolvedSearchParams = await searchParams;
+  const chemicals = await fetchChemicalList(resolvedSearchParams);
   return (
     <div>
       <div>
