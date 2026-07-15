@@ -82,6 +82,15 @@ export const COLUMN_LABELS = [
 
 const NUM_COLS = COLUMN_LABELS.length;
 
+// Fixed column widths (in points), measured proportionally off the
+// reference paper form so each column's width matches its real-world
+// counterpart instead of splitting the page evenly. Narrow date/quantity
+// columns stay narrow; the free-text columns (Supplier Information,
+// Details of usage, Name of trucker/carrier) get the extra room they
+// need. Sums to FULL_WIDTH_RULE (948pt) so the grid lines up exactly
+// under the full-width rule and the summary row above it.
+const COLUMN_WIDTHS = [65, 220, 106, 75, 48, 60, 139, 69, 66, 51, 49];
+
 // Columns whose values should be right-aligned, matching the reference
 // form's numeric-column convention.
 const RIGHT_ALIGNED_COLUMN_INDICES = new Set([4, 9, 10]);
@@ -103,7 +112,7 @@ function headerCell(columnIndex: number, unit: string) {
       stack: [
         { text: SUPPLIER_INFO_HEADER_LINES[0], alignment: 'center' as const, fontSize: 6.5 },
         {
-          canvas: [{ type: 'line' as const, x1: 0, y1: 0, x2: 120, y2: 0, lineWidth: 0.5 }],
+          canvas: [{ type: 'line' as const, x1: 0, y1: 0, x2: 100, y2: 0, lineWidth: 0.5 }],
           alignment: 'center' as const,
           margin: [0, 2, 0, 2] as [number, number, number, number],
         },
@@ -139,7 +148,7 @@ function summaryRowTable(
 ): ContentTable {
   return {
     table: {
-      widths: Array(NUM_COLS).fill('*'),
+      widths: COLUMN_WIDTHS,
       body: [
         [
           { text: [{ text: `IN (${unit}) `, bold: true, italics: true }, { text: fmtNum(totalIn) }] },
@@ -263,7 +272,7 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
     return {
       table: {
         headerRows: 1,
-        widths: Array(NUM_COLS).fill('*'),
+        widths: COLUMN_WIDTHS,
         body: tableBody,
       },
       layout: {
