@@ -87,9 +87,13 @@ const NUM_COLS = COLUMN_LABELS.length;
 // counterpart instead of splitting the page evenly. Narrow date/quantity
 // columns stay narrow; the free-text columns (Supplier Information,
 // Details of usage, Name of trucker/carrier) get the extra room they
-// need. Sums to FULL_WIDTH_RULE (948pt) so the grid lines up exactly
-// under the full-width rule and the summary row above it.
-const COLUMN_WIDTHS = [65, 220, 106, 75, 48, 60, 139, 69, 66, 51, 49];
+// need. Trimmed down from the initial measurement (Name of trucker/
+// carrier -10, Lot/batch no -6, Quantity Received -4, Details of usage
+// -4, Work Order No. if any -6, Quantity Used -4) after real-world
+// testing showed the table still clipping on the right edge. Sums to
+// FULL_WIDTH_RULE (914pt) so the grid lines up exactly under the
+// full-width rule and the summary row above it.
+const COLUMN_WIDTHS = [65, 220, 96, 69, 44, 60, 135, 63, 66, 47, 49];
 
 // Columns whose values should be right-aligned, matching the reference
 // form's numeric-column convention.
@@ -100,7 +104,7 @@ const REGISTER_SUBTITLE = '(Records required of a P3/P5-IM/P6) license holders';
 
 const GRID_LINE_WIDTH = 0.75;
 const GRID_LINE_COLOR = '#000000';
-const FULL_WIDTH_RULE = 948; // matches the content area width under the default LEGAL-landscape margins
+const FULL_WIDTH_RULE = 914; // matches the sum of COLUMN_WIDTHS, so the rule lines up with the table's outer edges
 
 // Every export page (including spillover pages) shows exactly this many
 // entry rows, blank-padded when there are fewer real entries.
@@ -171,7 +175,12 @@ function summaryRowTable(
         ],
       ],
     },
-    layout: 'noBorders',
+    layout: {
+      hLineWidth: () => 0,
+      vLineWidth: () => 0,
+      paddingLeft: () => 1,
+      paddingRight: () => 1,
+    },
     margin: [0, 4, 0, 8],
   };
 }
@@ -280,8 +289,8 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
         vLineWidth: () => GRID_LINE_WIDTH,
         hLineColor: () => GRID_LINE_COLOR,
         vLineColor: () => GRID_LINE_COLOR,
-        paddingLeft: () => 4,
-        paddingRight: () => 4,
+        paddingLeft: () => 1,
+        paddingRight: () => 1,
         paddingTop: () => 3,
         paddingBottom: () => 3,
         fillColor: () => '#ffffff',
