@@ -60,14 +60,25 @@ export function renderDocDefinitionToBuffer(docDefinition: TDocumentDefinitions)
 //   1. Fetch the chemical by id from Prisma; throw a "not found" error if
 //      missing.
 //   2. Fetch its transactions within [startDate, endDate] (matching on
-//      dateReceived for STOCK_IN rows, dateUsed for USAGE rows), ordered
-//      chronologically (falling back to sequenceNo to order same-day
-//      entries consistently).
+//      dateReceived for STOCK_IN rows, dateUsed for USAGE rows,
+//      dateReplenished for REPLENISH rows), ordered chronologically
+//      (falling back to sequenceNo to order same-day entries
+//      consistently). REPLENISH rows are included here even though
+//      they're excluded from the table itself (see
+//      chemicalDocument.ts) — they still affect the Out Balance chain,
+//      so the *last* transaction in range needs to be the true last one
+//      of any type.
 //   3. Fetch the single AppSettings row (id=1) for the signature block.
-//   4. Compute initialBalance: query the balanceOut of the last
-//      transaction for this chemical dated strictly before startDate
-//      (across both dateReceived and dateUsed); default to 0 if none
-//      exists.
+//   4. Compute two distinct "as of the day before startDate" figures from
+//      the last transaction (of any type) dated strictly before
+//      startDate:
+//        - initialCurrentBalance (its currentBalanceAfter): shown as
+//          "Initial Stock" — the Current Balance prior to this report's
+//          first entry.
+//        - initialOutBalance (its balanceOut): shown as the top "OUT (L)"
+//          figure — the Current Out Balance prior to this report's first
+//          entry, NOT a sum of usage within the range.
+//      Both default to 0 if no prior transaction exists.
 //   5. Call buildChemicalDocDefinition() with all of the above assembled
 //      into a ChemicalDocOptions object.
 //   6. Call renderDocDefinitionToBuffer() on the result and return it.
@@ -90,9 +101,15 @@ export async function generateChemicalPdf(
       OR: [
         { type: 'STOCK_IN', dateReceived: { gte: start, lte: end } },
         { type: 'USAGE', dateUsed: { gte: start, lte: end } },
+        { type: 'REPLENISH', dateReplenished: { gte: start, lte: end } },
       ],
     },
-    orderBy: [{ dateReceived: 'asc' }, { dateUsed: 'asc' }, { sequenceNo: 'asc' }],
+    orderBy: [
+      { dateReceived: 'asc' },
+      { dateUsed: 'asc' },
+      { dateReplenished: 'asc' },
+      { sequenceNo: 'asc' },
+    ],
   });
 
   const settings = await prisma.appSettings.findUniqueOrThrow({ where: { id: 1 } });
@@ -100,18 +117,24 @@ export async function generateChemicalPdf(
   const priorTransaction = await prisma.transaction.findFirst({
     where: {
       chemicalId,
-      OR: [{ dateReceived: { lt: start } }, { dateUsed: { lt: start } }],
+      OR: [
+        { dateReceived: { lt: start } },
+        { dateUsed: { lt: start } },
+        { dateReplenished: { lt: start } },
+      ],
     },
     orderBy: { sequenceNo: 'desc' },
   });
-  const initialBalance = priorTransaction ? Number(priorTransaction.balanceOut) : 0;
+  const initialCurrentBalance = priorTransaction ? Number(priorTransaction.currentBalanceAfter) : 0;
+  const initialOutBalance = priorTransaction ? Number(priorTransaction.balanceOut) : 0;
 
   const docDefinition = buildChemicalDocDefinition({
     chemical,
     transactions,
     startDate,
     endDate,
-    initialBalance,
+    initialCurrentBalance,
+    initialOutBalance,
     settings,
   });
 

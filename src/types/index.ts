@@ -11,6 +11,7 @@ export interface ChemicalSummary {
   category: string | null;
   unit: string;
   currentBalance: number;
+  currentOutBalance: number;
   lowStockThreshold: number | null;
   isArchived: boolean;
   lastActivityDate: string | null; // "YYYY-MM-DD", derived from the latest transaction
@@ -19,7 +20,7 @@ export interface ChemicalSummary {
 export interface TransactionDTO {
   id: string;
   chemicalId: string;
-  type: 'STOCK_IN' | 'USAGE';
+  type: 'STOCK_IN' | 'USAGE' | 'REPLENISH';
   sequenceNo: number;
   dateReceived: string | null;
   supplierInfo: string | null;
@@ -31,7 +32,11 @@ export interface TransactionDTO {
   workOrderNo: string | null;
   lotBatchNoUsed: string | null;
   quantityUsed: number | null;
-  balanceOut: number;
+  dateReplenished: string | null;
+  quantityReplenished: number | null;
+  replenishNotes: string | null;
+  balanceOut: number; // running "Current Out Balance" after this row
+  currentBalanceAfter: number; // running "Current Balance" (total inventory) after this row
   balanceOverridden: boolean;
   isOverdrawn: boolean;
   isAnchor: boolean;

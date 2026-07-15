@@ -63,7 +63,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         orderBy: { sequenceNo: 'desc' },
       });
       const lastActivityDate = latest
-        ? (latest.dateUsed ?? latest.dateReceived)?.toISOString().slice(0, 10) ?? null
+        ? (latest.dateUsed ?? latest.dateReceived ?? latest.dateReplenished)
+            ?.toISOString()
+            .slice(0, 10) ?? null
         : null;
 
       return {
@@ -73,6 +75,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         category: chemical.category,
         unit: chemical.unit,
         currentBalance: Number(chemical.currentBalance),
+        currentOutBalance: Number(chemical.currentOutBalance),
         lowStockThreshold:
           chemical.lowStockThreshold !== null ? Number(chemical.lowStockThreshold) : null,
         isArchived: chemical.isArchived,
@@ -118,6 +121,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     data: {
       ...parsed.data,
       currentBalance: 0,
+      currentOutBalance: 0,
     },
   });
 

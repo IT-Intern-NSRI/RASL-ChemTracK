@@ -39,10 +39,27 @@ export const usageSchema = z.object({
 });
 export type UsageInput = z.infer<typeof usageSchema>;
 
+// Replenish: moves quantity from bulk stock into the smaller day-to-day
+// working container. Distinct from a Stock-In (newly purchased/received
+// stock) — a Replenish only affects the "Current Out Balance", never the
+// "Current Balance" (total inventory). Replenish logs are never shown in
+// the exported PDF. Date Replenished and Quantity Replenished are
+// required; Notes is optional. Balance (Out) is optional — omitting it
+// means "auto-compute as current Out Balance plus quantity replenished";
+// providing it means a manual override.
+export const replenishSchema = z.object({
+  dateReplenished: z.string().date().optional(), // defaults to today (Manila) if omitted
+  quantityReplenished: z.number().positive(),
+  replenishNotes: z.string().optional(),
+  balanceOut: z.number().optional(),
+});
+export type ReplenishInput = z.infer<typeof replenishSchema>;
+
 // Partial variants, used when editing an existing transaction (only the
 // fields being changed are sent).
 export const stockInUpdateSchema = stockInSchema.partial();
 export const usageUpdateSchema = usageSchema.partial();
+export const replenishUpdateSchema = replenishSchema.partial();
 
 export const chemicalCreateSchema = z.object({
   name: z.string().min(1),

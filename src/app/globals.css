@@ -453,6 +453,11 @@ tbody tr:hover {
   color: var(--color-usage);
 }
 
+.badge-replenish {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+}
+
 .badge-low-stock {
   background: var(--color-low-stock-bg);
   color: #92650a;
@@ -641,6 +646,12 @@ tbody tr:hover {
 .balance-figure {
   font-size: 1.1rem;
   font-weight: 700;
+}
+
+.balance-figure--out {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
 }
 
 .summary-list {

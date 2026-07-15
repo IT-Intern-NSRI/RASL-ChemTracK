@@ -8,32 +8,51 @@
 //     range on the right.
 //   - A one-time content header: the chemical's full CPECS descriptor
 //     (bold, centered) with its "CPECS (name, form, purity, packaging)"
-//     caption underneath (italic, centered), a full-width rule, then the
-//     IN / OUT / Initial-Balance-Forwarded summary row.
+//     caption underneath (italic, centered), a full-width rule, then a
+//     four-figure IN / OUT / Initial Stock / Balance Forwarded summary
+//     row (see the definitions below — confirmed against a real
+//     reference export).
 //   - The 11-column transaction table with a fully ruled grid, white
 //     background, and centered column headers, repeating across pages.
+//     REPLENISH transactions are excluded from this table entirely (they
+//     still affect the Out Balance chain other rows carry, just aren't
+//     shown as their own row) — per project decision, replenish logs
+//     never appear in the exported PDF.
 //   - A signature footer: a rule, the signatory's name (with credentials
 //     appended on the same line) sitting on the rule, and the signatory's
 //     title directly below in italics.
 //
-// OPEN ITEM: the reference form's "Initial Stock/Balance Forwarded"
-// section showed two numbers whose exact meaning wasn't confirmed (see
-// project notes). This function still only computes a single
-// balance-as-of-range-start figure (`initialBalance` below).
+// Summary-row definitions (each confirmed against a real reference
+// export spanning several months):
+//   - "IN (L)": sum of quantityReceived across STOCK_IN rows in range.
+//   - "OUT (L)": NOT a sum of usage. It's the Current Out Balance as of
+//     immediately before this report's date range (i.e.
+//     options.initialOutBalance) — the same figure carries unchanged
+//     across a whole report if no USAGE/REPLENISH occurred in range.
+//   - "Initial Stock (L)": the Current Balance (total inventory) as of
+//     immediately before this report's date range
+//     (options.initialCurrentBalance).
+//   - "Balance Forwarded (L)": IN + (the last transaction in range's
+//     Balance (Out), of ANY type including REPLENISH, or "OUT (L)" if
+//     there were no transactions in range) + "Initial Stock (L)" -
+//     "OUT (L)". This is what "Initial Stock" becomes on the *next*
+//     report.
 
 import { TDocumentDefinitions, ContentTable } from 'pdfmake/interfaces';
 import { Chemical, Transaction, AppSettings } from '@prisma/client';
 
 export interface ChemicalDocOptions {
   chemical: Chemical;
-  transactions: Transaction[]; // pre-filtered to the export date range, chronological order
+  transactions: Transaction[]; // pre-filtered to the export date range, chronological order, ALL types (including REPLENISH — needed for the Balance Forwarded figure even though replenish rows aren't individually displayed)
   startDate: string; // "YYYY-MM-DD"
   endDate: string; // "YYYY-MM-DD"
-  initialBalance: number; // balanceOut of the last transaction dated before startDate (0 if none)
+  initialCurrentBalance: number; // currentBalanceAfter of the last transaction dated before startDate (0 if none) — "Initial Stock"
+  initialOutBalance: number; // balanceOut of the last transaction dated before startDate (0 if none) — the top "OUT (L)" figure
   settings: AppSettings;
 }
 
-// The fixed 11 columns, in order, matching the reference form.
+// The fixed 11 columns, in order, matching the reference form. REPLENISH
+// transactions never populate a row in this table (see module comment).
 export const COLUMN_LABELS = [
   'Date Received',
   'Supplier Information',
@@ -66,30 +85,53 @@ function cell(value: string, columnIndex: number, isHeader = false) {
   };
 }
 
+function summaryField(label: string, value: number) {
+  return {
+    width: 'auto' as const,
+    columns: [
+      { text: label, bold: true, italics: true, width: 'auto' as const },
+      { text: String(value), width: 'auto' as const, margin: [6, 0, 0, 0] as [number, number, number, number] },
+    ],
+  };
+}
+
 // def buildChemicalDocDefinition(): Input is one ChemicalDocOptions object
-// (the chemical record, its in-range transactions in chronological order,
-// the export date range, the pre-computed opening balance, and the global
-// app settings/signatory info). Output is one pdfmake
-// TDocumentDefinitions object, ready to hand to
+// (the chemical record, its in-range transactions of all types in
+// chronological order, the export date range, the two pre-computed
+// opening-balance figures, and the global app settings/signatory info).
+// Output is one pdfmake TDocumentDefinitions object, ready to hand to
 // renderDocDefinitionToBuffer().
 export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocumentDefinitions {
-  const { chemical, transactions, startDate, endDate, initialBalance, settings } = options;
+  const {
+    chemical,
+    transactions,
+    startDate,
+    endDate,
+    initialCurrentBalance,
+    initialOutBalance,
+    settings,
+  } = options;
 
   const totalIn = transactions
     .filter((t) => t.type === 'STOCK_IN')
     .reduce((sum, t) => sum + Number(t.quantityReceived ?? 0), 0);
 
-  const totalOut = transactions
-    .filter((t) => t.type === 'USAGE')
-    .reduce((sum, t) => sum + Number(t.quantityUsed ?? 0), 0);
+  const lastTransactionInRange = transactions[transactions.length - 1];
+  const finalEntryBalanceOut = lastTransactionInRange
+    ? Number(lastTransactionInRange.balanceOut)
+    : initialOutBalance;
+
+  const balanceForwarded = totalIn + finalEntryBalanceOut + initialCurrentBalance - initialOutBalance;
 
   const fmtDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '');
 
-  const tableBody: any[] = [
-    COLUMN_LABELS.map((label, i) => cell(label, i, true)),
-  ];
+  // Replenish rows affect the chain (already reflected in later rows'
+  // Balance (Out) values) but are never shown as their own table row.
+  const displayedTransactions = transactions.filter((t) => t.type !== 'REPLENISH');
 
-  for (const t of transactions) {
+  const tableBody: any[] = [COLUMN_LABELS.map((label, i) => cell(label, i, true))];
+
+  for (const t of displayedTransactions) {
     if (t.type === 'STOCK_IN') {
       tableBody.push(
         [
@@ -165,32 +207,10 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
       },
       {
         columns: [
-          {
-            width: 'auto',
-            columns: [
-              { text: `IN (${chemical.unit})`, bold: true, italics: true, width: 'auto' },
-              { text: String(totalIn), width: 'auto', margin: [6, 0, 0, 0] },
-            ],
-          },
-          {
-            width: 'auto',
-            columns: [
-              { text: `OUT (${chemical.unit})`, bold: true, italics: true, width: 'auto' },
-              { text: String(totalOut), width: 'auto', margin: [6, 0, 0, 0] },
-            ],
-          },
-          {
-            width: '*',
-            columns: [
-              {
-                text: `Initial Stock/Balance\nForwarded: (${chemical.unit})`,
-                bold: true,
-                italics: true,
-                width: 'auto',
-              },
-              { text: String(initialBalance), width: 'auto', margin: [6, 0, 0, 0] },
-            ],
-          },
+          summaryField(`IN (${chemical.unit})`, totalIn),
+          summaryField(`OUT (${chemical.unit})`, initialOutBalance),
+          summaryField(`Initial Stock (${chemical.unit})`, initialCurrentBalance),
+          summaryField(`Balance Forwarded (${chemical.unit})`, balanceForwarded),
         ],
         columnGap: 24,
         margin: [0, 0, 0, 10],

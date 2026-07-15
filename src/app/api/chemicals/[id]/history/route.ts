@@ -50,6 +50,7 @@ export async function GET(request: NextRequest, { params: paramsPromise }: Route
     where.OR = [
       { dateUsed: { gte: start, lte: end } },
       { dateReceived: { gte: start, lte: end } },
+      { dateReplenished: { gte: start, lte: end } },
     ];
   }
 
@@ -78,7 +79,11 @@ export async function GET(request: NextRequest, { params: paramsPromise }: Route
     workOrderNo: t.workOrderNo,
     lotBatchNoUsed: t.lotBatchNoUsed,
     quantityUsed: t.quantityUsed !== null ? Number(t.quantityUsed) : null,
+    dateReplenished: t.dateReplenished ? t.dateReplenished.toISOString().slice(0, 10) : null,
+    quantityReplenished: t.quantityReplenished !== null ? Number(t.quantityReplenished) : null,
+    replenishNotes: t.replenishNotes,
     balanceOut: Number(t.balanceOut),
+    currentBalanceAfter: Number(t.currentBalanceAfter),
     balanceOverridden: t.balanceOverridden,
     isOverdrawn: t.isOverdrawn,
     isAnchor: t.isAnchor,

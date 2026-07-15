@@ -2,14 +2,17 @@
 //
 // PURE FRONTEND FILE — plain description:
 // A single collapsible card representing one transaction. Collapsed
-// state shows: date, a type badge ("Stock-In" in green / "Usage" in
-// blue), the quantity delta (+X or -X), and the resulting balance.
-// Expanded state additionally shows whichever fields are populated for
-// that type (supplier info / trucker / lot-batch / quantity received for
+// state shows: date, a type badge ("Stock-In" in green / "Usage" in blue
+// / "Replenish" in purple), the quantity delta (+X or -X, blank delta
+// symbol for replenish since it's an internal transfer rather than
+// inventory in/out), and the resulting Out Balance. Expanded state
+// additionally shows whichever fields are populated for that type
+// (supplier info / trucker / lot-batch / quantity received for
 // stock-in; details of usage / work order / lot-batch used / quantity
-// used for usage). An overdrawn usage entry is visually flagged via the
-// [data-overdrawn] CSS hook in globals.css. Fully presentational — no
-// data fetching, just prop rendering.
+// used for usage; quantity replenished / notes for replenish). An
+// overdrawn usage entry is visually flagged via the [data-overdrawn] CSS
+// hook in globals.css. Fully presentational — no data fetching, just
+// prop rendering.
 
 import { TransactionDTO } from '@/types';
 
@@ -20,29 +23,54 @@ interface TransactionCardProps {
   onToggle: () => void;
 }
 
+const BADGE_CLASS: Record<TransactionDTO['type'], string> = {
+  STOCK_IN: 'badge-stock-in',
+  USAGE: 'badge-usage',
+  REPLENISH: 'badge-replenish',
+};
+
+const BADGE_LABEL: Record<TransactionDTO['type'], string> = {
+  STOCK_IN: 'Stock-In',
+  USAGE: 'Usage',
+  REPLENISH: 'Replenish',
+};
+
 export function TransactionCard({ transaction, unit, expanded, onToggle }: TransactionCardProps) {
-  const isStockIn = transaction.type === 'STOCK_IN';
-  const date = isStockIn ? transaction.dateReceived : transaction.dateUsed;
-  const quantity = isStockIn ? transaction.quantityReceived : transaction.quantityUsed;
+  const { type } = transaction;
+
+  const date =
+    type === 'STOCK_IN'
+      ? transaction.dateReceived
+      : type === 'USAGE'
+        ? transaction.dateUsed
+        : transaction.dateReplenished;
+
+  const quantity =
+    type === 'STOCK_IN'
+      ? transaction.quantityReceived
+      : type === 'USAGE'
+        ? transaction.quantityUsed
+        : transaction.quantityReplenished;
+
+  const qtySign = type === 'USAGE' ? '-' : type === 'STOCK_IN' ? '+' : '+';
+  const qtyClass = type === 'USAGE' ? 'tx-card__qty--out' : 'tx-card__qty--in';
 
   return (
     <div className="tx-card" onClick={onToggle} data-overdrawn={transaction.isOverdrawn}>
       <div className="tx-card__row">
         <span className="tx-card__date">{date}</span>
-        <span className={`badge ${isStockIn ? 'badge-stock-in' : 'badge-usage'}`}>
-          {isStockIn ? 'Stock-In' : 'Usage'}
-        </span>
-        <span className={`tx-card__qty ${isStockIn ? 'tx-card__qty--in' : 'tx-card__qty--out'}`}>
-          {isStockIn ? '+' : '-'}
+        <span className={`badge ${BADGE_CLASS[type]}`}>{BADGE_LABEL[type]}</span>
+        <span className={`tx-card__qty ${qtyClass}`}>
+          {qtySign}
           {quantity} {unit}
         </span>
         <span className="tx-card__balance">
-          Balance: {transaction.balanceOut} {unit}
+          Out Balance: {transaction.balanceOut} {unit}
         </span>
       </div>
       {expanded && (
         <div className="tx-card__details">
-          {isStockIn ? (
+          {type === 'STOCK_IN' && (
             <>
               <div>
                 <strong>Supplier:</strong> {transaction.supplierInfo ?? '—'}
@@ -54,7 +82,8 @@ export function TransactionCard({ transaction, unit, expanded, onToggle }: Trans
                 <strong>Lot/Batch No.:</strong> {transaction.lotBatchNo ?? '—'}
               </div>
             </>
-          ) : (
+          )}
+          {type === 'USAGE' && (
             <>
               <div>
                 <strong>Details of Usage:</strong> {transaction.detailsOfUsage ?? '—'}
@@ -66,6 +95,11 @@ export function TransactionCard({ transaction, unit, expanded, onToggle }: Trans
                 <strong>Lot/Batch No. used:</strong> {transaction.lotBatchNoUsed ?? '—'}
               </div>
             </>
+          )}
+          {type === 'REPLENISH' && (
+            <div>
+              <strong>Notes:</strong> {transaction.replenishNotes ?? '—'}
+            </div>
           )}
         </div>
       )}

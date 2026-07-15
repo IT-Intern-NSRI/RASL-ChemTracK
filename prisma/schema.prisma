@@ -14,10 +14,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// One row per chemical. currentBalance is a cached "latest balance" figure,
-// kept in sync by src/lib/balance.ts every time a transaction is written,
-// edited, or deleted. It always equals the balanceOut of that chemical's
-// most recent Transaction row (by sequenceNo).
+// One row per chemical. currentBalance is the total-inventory figure
+// ("Current Balance" in the app's UI): increased by STOCK_IN, decreased by
+// USAGE, unaffected by REPLENISH. currentOutBalance is the separate
+// "Current Out Balance" figure — the amount currently decanted into the
+// smaller day-to-day working container: increased by REPLENISH, decreased
+// by USAGE, unaffected by STOCK_IN. Both are cached "latest" figures kept
+// in sync by src/lib/balance.ts on every write/edit/delete; each equals
+// the corresponding chained field (currentBalanceAfter / balanceOut) of
+// that chemical's most recent Transaction row (by sequenceNo).
 model Chemical {
   id                String   @id @default(cuid())
   name              String // short display name, used on the dashboard
@@ -25,6 +30,7 @@ model Chemical {
   category          String?
   unit              String   @default("L")
   currentBalance    Decimal  @default(0) @db.Decimal(14, 4)
+  currentOutBalance Decimal  @default(0) @db.Decimal(14, 4)
   lowStockThreshold Decimal? @db.Decimal(14, 4)
   isArchived        Boolean  @default(false)
   createdAt         DateTime @default(now())
@@ -38,12 +44,26 @@ model Chemical {
 enum TransactionType {
   STOCK_IN
   USAGE
+  REPLENISH
 }
 
-// One row per stock-in OR usage instance (never both — this is what makes
-// a same-day stock-in + usage two independent rows, per the project's
-// edge-case rule). balanceOut is stored at write-time; see src/lib/balance.ts
-// for why the ledger chain follows sequenceNo rather than the date fields.
+// One row per stock-in, usage, OR replenish instance (never more than one
+// of these per row — this is what makes a same-day stock-in + usage two
+// independent rows, per the project's edge-case rule; replenish instances
+// follow the same rule). Both chain fields are stored at write-time; see
+// src/lib/balance.ts for why the ledger chain follows sequenceNo rather
+// than the date fields.
+//
+// balanceOut = the running "Current Out Balance" chain value after this
+// row (STOCK_IN carries it forward unchanged; USAGE decreases it;
+// REPLENISH increases it). This is what prints in the exported PDF's
+// "Balance (Out)" column.
+//
+// currentBalanceAfter = the running "Current Balance" (total inventory)
+// chain value after this row (STOCK_IN increases it; USAGE decreases it;
+// REPLENISH leaves it unchanged). Not shown in the exported PDF table,
+// but needed so edits/deletes can correctly recompute history, and shown
+// in the app's own transaction history view.
 model Transaction {
   id         String          @id @default(cuid())
   chemicalId String
@@ -65,11 +85,20 @@ model Transaction {
   lotBatchNoUsed String?
   quantityUsed   Decimal?  @db.Decimal(14, 4)
 
+  // --- replenish fields (populated only when type = REPLENISH) ---
+  // Moves quantity from bulk stock into the smaller day-to-day working
+  // container. Distinct from STOCK_IN, which is newly purchased/received
+  // stock. Replenish rows are excluded from the exported PDF.
+  dateReplenished     DateTime? @db.Date
+  quantityReplenished Decimal?  @db.Decimal(14, 4)
+  replenishNotes      String?
+
   // --- shared ---
-  balanceOut        Decimal @db.Decimal(14, 4)
-  balanceOverridden Boolean @default(false) // true if the user manually overwrote the auto-computed value
-  isOverdrawn       Boolean @default(false) // true if a USAGE row drove the balance negative (flagged, never blocked)
-  isAnchor          Boolean @default(false) // true if retained across a 5-year purge as the pre-cutoff balance anchor
+  balanceOut          Decimal @db.Decimal(14, 4) // running "Current Out Balance" after this row
+  currentBalanceAfter Decimal @db.Decimal(14, 4) // running "Current Balance" (total inventory) after this row
+  balanceOverridden   Boolean @default(false) // true if the user manually overwrote the auto-computed balanceOut
+  isOverdrawn         Boolean @default(false) // true if a USAGE row drove the Out Balance negative (flagged, never blocked)
+  isAnchor            Boolean @default(false) // true if retained across a 5-year purge as the pre-cutoff balance anchor
 
   edited      Boolean @default(false)
   editHistory Json? // array of { field, oldValue, newValue, editedAt } entries
@@ -80,6 +109,7 @@ model Transaction {
   @@index([chemicalId, sequenceNo])
   @@index([chemicalId, dateUsed])
   @@index([chemicalId, dateReceived])
+  @@index([chemicalId, dateReplenished])
 }
 
 // Single-row table (id is always 1) holding the fixed/global settings that

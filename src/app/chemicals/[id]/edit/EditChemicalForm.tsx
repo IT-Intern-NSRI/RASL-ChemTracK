@@ -35,11 +35,23 @@ export function EditChemicalForm({ chemicalId }: EditChemicalFormProps) {
 
   async function handleSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
+    if (!form) return;
+
+    const payload = {
+      name: form.name,
+      cpecsDescriptor: form.cpecsDescriptor,
+      category: form.category,
+      unit: form.unit,
+      lowStockThreshold:
+        form.lowStockThreshold === '' || form.lowStockThreshold === null
+          ? undefined
+          : Number(form.lowStockThreshold),
+    };
 
     const response = await fetch(`/api/chemicals/${chemicalId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
 
     if (response.ok) {

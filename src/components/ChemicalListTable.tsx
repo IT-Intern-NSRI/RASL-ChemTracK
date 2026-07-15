@@ -2,9 +2,10 @@
 //
 // PURE FRONTEND FILE — plain description:
 // Read-only table listing chemical summaries: Name, Category, Current
-// Balance, Last Activity. Each row links to /chemicals/[id]. Rows where
-// currentBalance is at or below lowStockThreshold are visually flagged
-// (via the [data-low-stock] CSS hook in globals.css).
+// Balance, Current Out Balance, Last Activity. Each row links to
+// /chemicals/[id]. Rows where currentBalance is at or below
+// lowStockThreshold are visually flagged (via the [data-low-stock] CSS
+// hook in globals.css).
 
 import Link from 'next/link';
 import { ChemicalSummary } from '@/types';
@@ -33,6 +34,7 @@ export function ChemicalListTable({ chemicals }: ChemicalListTableProps) {
           <th>Name</th>
           <th>Category</th>
           <th>Current Balance</th>
+          <th>Current Out Balance</th>
           <th>Last Activity</th>
         </tr>
       </thead>
@@ -46,6 +48,9 @@ export function ChemicalListTable({ chemicals }: ChemicalListTableProps) {
             <td data-label="Category">{chemical.category ?? '—'}</td>
             <td data-label="Current Balance">
               {chemical.currentBalance} {chemical.unit}
+            </td>
+            <td data-label="Current Out Balance">
+              {chemical.currentOutBalance} {chemical.unit}
             </td>
             <td data-label="Last Activity">{chemical.lastActivityDate ?? '—'}</td>
           </tr>

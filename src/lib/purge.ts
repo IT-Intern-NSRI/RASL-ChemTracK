@@ -38,8 +38,8 @@ export interface PurgePlanSummary {
 //   1. Resolve cutoffDate = input ?? getCutoffDateManila(DEFAULT_PURGE_YEARS).
 //   2. For every chemical, find its anchor row: the most recent
 //      transaction dated strictly before cutoffDate (checking whichever
-//      of dateReceived/dateUsed is populated). If none exists, there's
-//      nothing to purge for that chemical — skip it.
+//      of dateReceived/dateUsed/dateReplenished is populated). If none
+//      exists, there's nothing to purge for that chemical — skip it.
 //   3. Collect the ids of every OTHER transaction for that chemical dated
 //      strictly before cutoffDate (i.e. excluding the anchor) — these are
 //      the deletion candidates.
@@ -73,7 +73,11 @@ export async function preparePurge(
     const beforeCutoff = await prisma.transaction.findMany({
       where: {
         chemicalId: chemical.id,
-        OR: [{ dateReceived: { lt: cutoff } }, { dateUsed: { lt: cutoff } }],
+        OR: [
+          { dateReceived: { lt: cutoff } },
+          { dateUsed: { lt: cutoff } },
+          { dateReplenished: { lt: cutoff } },
+        ],
       },
       orderBy: { sequenceNo: 'desc' },
     });
@@ -100,7 +104,7 @@ export async function preparePurge(
     });
 
     for (const row of toDelete) {
-      const rowDate = row.dateReceived ?? row.dateUsed;
+      const rowDate = row.dateReceived ?? row.dateUsed ?? row.dateReplenished;
       if (rowDate && (!earliestDate || rowDate < earliestDate)) {
         earliestDate = rowDate;
       }

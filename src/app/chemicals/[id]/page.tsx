@@ -2,12 +2,14 @@
 //
 // PURE FRONTEND FILE — plain description:
 // The chemical detail / usage history page. Header shows the chemical's
-// name, CPECS descriptor, current balance + unit, and buttons: "Log
-// Usage" (-> /chemicals/[id]/log-usage), "Log Stock-In"
-// (-> /chemicals/[id]/log-stock-in), "Export" (opens a date-range picker,
-// downloads this chemical's PDF), and "Edit" (-> /chemicals/[id]/edit).
-// Below that, a date-range filter, then <UsageHistoryList/> rendering the
-// mobile-optimized, newest-first card list of stock-in/usage instances.
+// name, CPECS descriptor, current balance + current Out Balance (both
+// with unit), and buttons: "Log Usage" (-> /chemicals/[id]/log-usage),
+// "Log Stock-In" (-> /chemicals/[id]/log-stock-in), "Log Replenish"
+// (-> /chemicals/[id]/log-replenish), "Export" (opens a date-range
+// picker, downloads this chemical's PDF), and "Edit"
+// (-> /chemicals/[id]/edit). Below that, a date-range filter, then
+// <UsageHistoryList/> rendering the mobile-optimized, newest-first card
+// list of stock-in/usage/replenish instances.
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -89,6 +91,9 @@ export default async function ChemicalDetailPage({ params, searchParams }: Chemi
           <p className="balance-figure">
             Current balance: {chemical.currentBalance} {chemical.unit}
           </p>
+          <p className="balance-figure balance-figure--out">
+            Current Out Balance: {chemical.currentOutBalance} {chemical.unit}
+          </p>
         </div>
         <div className="toolbar">
           <Link href={`/chemicals/${chemical.id}/log-usage`} className="btn btn-secondary">
@@ -96,6 +101,9 @@ export default async function ChemicalDetailPage({ params, searchParams }: Chemi
           </Link>
           <Link href={`/chemicals/${chemical.id}/log-stock-in`} className="btn btn-secondary">
             Log Stock-In
+          </Link>
+          <Link href={`/chemicals/${chemical.id}/log-replenish`} className="btn btn-secondary">
+            Log Replenish
           </Link>
           <ExportButton mode="single" chemicalId={chemical.id} />
           <Link href={`/chemicals/${chemical.id}/edit`} className="btn btn-ghost">

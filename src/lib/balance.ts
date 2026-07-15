@@ -1,30 +1,62 @@
 // src/lib/balance.ts
 //
 // The ledger core. This is the most important file in the app: it's what
-// keeps Balance (Out) and each chemical's current balance correct as usage
-// and stock-in instances are logged, edited, or deleted — including the
-// case where a backdated entry is added out of chronological order.
+// keeps two independent running balances correct as stock-in, usage, and
+// replenish instances are logged, edited, or deleted — including the case
+// where a backdated entry is added out of chronological order.
 //
-// Design note: balanceOut is stored on every Transaction row at write-time
-// (not derived live from the full history on every read). The chain of
-// truth follows `sequenceNo` (insertion order), not `dateUsed`/
-// `dateReceived` (which the user can freely edit/backdate). This is also
-// what makes the 5-year purge safe: deleting old rows can't corrupt
-// current balances, because every remaining row already carries its own
-// correct balanceOut.
+// TWO independent balances are tracked per chemical:
+//   - "Current Balance" (Chemical.currentBalance / Transaction.
+//     currentBalanceAfter): total inventory on hand. += STOCK_IN's
+//     quantityReceived, -= USAGE's quantityUsed, UNCHANGED by REPLENISH
+//     (replenish only moves already-counted stock between the bulk
+//     container and the smaller working container — it doesn't change
+//     how much you have in total).
+//   - "Current Out Balance" (Chemical.currentOutBalance / Transaction.
+//     balanceOut): the amount currently decanted into the smaller
+//     day-to-day working container. += REPLENISH's quantityReplenished,
+//     -= USAGE's quantityUsed, UNCHANGED by STOCK_IN (newly received bulk
+//     stock doesn't automatically top up the working container).
+// USAGE is the only transaction type that touches both at once, since a
+// real withdrawal is drawn from the working container and also depletes
+// total inventory.
+//
+// Design note: both balances are stored on every Transaction row at
+// write-time (not derived live from the full history on every read). The
+// chain of truth follows `sequenceNo` (insertion order), not
+// `dateUsed`/`dateReceived`/`dateReplenished` (which the user can freely
+// edit/backdate). This is also what makes the 5-year purge safe: deleting
+// old rows can't corrupt current balances, because every remaining row
+// already carries its own correct balances.
+//
+// Only "Current Out Balance" (balanceOut) supports the manual-override
+// mechanism (the "Balance (Out)" field exposed on the stock-in/usage/
+// replenish forms) — "Current Balance" (currentBalanceAfter) is always
+// purely computed, since there's no UI for overriding it.
 
 import { Prisma, TransactionType } from '@prisma/client';
 import { prisma } from './prisma';
-import { StockInInput, UsageInput, stockInUpdateSchema, usageUpdateSchema } from './validation';
+import {
+  StockInInput,
+  UsageInput,
+  ReplenishInput,
+  stockInUpdateSchema,
+  usageUpdateSchema,
+  replenishUpdateSchema,
+} from './validation';
 import { getTodayManila, toManilaDateOnly } from './timezone';
 
-// def computeNewBalance(): Input is one number (currentBalance, in liters),
-// one TransactionType ('STOCK_IN' or 'USAGE'), and one number (quantity,
-// in liters). Output is one number (the resulting balance).
+type AnyInput = StockInInput | UsageInput | ReplenishInput;
+
+// def computeNewCurrentBalance(): Input is one number (currentBalance, in
+// liters), one TransactionType, and one number (quantity, in liters).
+// Output is one number (the resulting Current Balance / total-inventory
+// figure).
 // Pseudocode:
 //   1. If type is 'STOCK_IN', return currentBalance + quantity.
 //   2. If type is 'USAGE', return currentBalance - quantity.
-export function computeNewBalance(
+//   3. If type is 'REPLENISH', return currentBalance unchanged.
+export function computeNewCurrentBalance(
   currentBalance: number,
   type: TransactionType,
   quantity: number
@@ -32,46 +64,81 @@ export function computeNewBalance(
   if (type === 'STOCK_IN') {
     return currentBalance + quantity;
   }
-  return currentBalance - quantity;
+  if (type === 'USAGE') {
+    return currentBalance - quantity;
+  }
+  return currentBalance;
+}
+
+// def computeNewOutBalance(): Input is one number (outBalance, in
+// liters), one TransactionType, and one number (quantity, in liters).
+// Output is one number (the resulting Current Out Balance figure).
+// Pseudocode:
+//   1. If type is 'REPLENISH', return outBalance + quantity.
+//   2. If type is 'USAGE', return outBalance - quantity.
+//   3. If type is 'STOCK_IN', return outBalance unchanged.
+export function computeNewOutBalance(
+  outBalance: number,
+  type: TransactionType,
+  quantity: number
+): number {
+  if (type === 'REPLENISH') {
+    return outBalance + quantity;
+  }
+  if (type === 'USAGE') {
+    return outBalance - quantity;
+  }
+  return outBalance;
+}
+
+function quantityFor(type: TransactionType, input: AnyInput): number {
+  if (type === 'STOCK_IN') return (input as StockInInput).quantityReceived;
+  if (type === 'USAGE') return (input as UsageInput).quantityUsed;
+  return (input as ReplenishInput).quantityReplenished;
 }
 
 // def recordTransaction(): Input is one chemical id (string), one
-// validated input object (StockInInput or UsageInput), and one
-// TransactionType. Output is a Promise resolving to the created
+// validated input object (StockInInput, UsageInput, or ReplenishInput),
+// and one TransactionType. Output is a Promise resolving to the created
 // Transaction row (as a plain object matching the Prisma Transaction
 // model).
 // Pseudocode:
 //   1. Open a Prisma interactive transaction (prisma.$transaction) so
-//      reading the chemical's current balance and writing the new row +
-//      updated balance happen atomically. Lock the chemical row (e.g. via
-//      a raw `SELECT ... FOR UPDATE` query inside the transaction) to
+//      reading the chemical's current balances and writing the new row +
+//      updated balances happen atomically. Lock the chemical row (e.g.
+//      via a raw `SELECT ... FOR UPDATE` query inside the transaction) to
 //      prevent a race between two concurrent submissions for the same
 //      chemical.
-//   2. Load the chemical row (currentBalance) inside that locked
-//      transaction.
-//   3. Determine the quantity to use: input.quantityReceived for
-//      STOCK_IN, input.quantityUsed for USAGE.
+//   2. Load the chemical row (currentBalance, currentOutBalance) inside
+//      that locked transaction.
+//   3. Determine the quantity to use: quantityReceived for STOCK_IN,
+//      quantityUsed for USAGE, quantityReplenished for REPLENISH.
 //   4. Compute nextSequenceNo = (max existing sequenceNo for this
 //      chemical, or 0) + 1.
-//   5. If input.balanceOut was explicitly provided, treat it as a manual
-//      override: balanceOverridden = true, balanceOut = input.balanceOut.
-//      Otherwise compute balanceOut via computeNewBalance() and
-//      balanceOverridden = false.
-//   6. If type is USAGE and the resulting balanceOut < 0, set
+//   5. Compute newCurrentBalance via computeNewCurrentBalance() —
+//      this is never manually overridden (no UI field for it).
+//   6. If input.balanceOut was explicitly provided, treat it as a manual
+//      override of the Out Balance: balanceOverridden = true,
+//      newOutBalance = input.balanceOut. Otherwise compute newOutBalance
+//      via computeNewOutBalance() and balanceOverridden = false.
+//   7. If type is USAGE and the resulting newOutBalance < 0, set
 //      isOverdrawn = true — but still allow the write (usage is flagged,
-//      never blocked, per project decision).
-//   7. Normalize the relevant date field: use the caller-supplied date if
+//      never blocked, per project decision). Overdraw is judged against
+//      the Out Balance (the working container someone would actually
+//      notice running dry), not the total Current Balance.
+//   8. Normalize the relevant date field: use the caller-supplied date if
 //      present, otherwise default to getTodayManila(); pass any
 //      caller-supplied date through toManilaDateOnly() to normalize it.
-//   8. Insert the Transaction row with only the appropriate field group
-//      populated (stock-in fields OR usage fields) and the rest left
-//      null — this is what keeps a same-day stock-in and usage as two
-//      independent rows.
-//   9. Update chemical.currentBalance to the new balanceOut.
-//   10. Commit the Prisma transaction and return the created row.
+//   9. Insert the Transaction row with only the appropriate field group
+//      populated (stock-in fields, usage fields, OR replenish fields) and
+//      the rest left null — this is what keeps a same-day stock-in,
+//      usage, and replenish as independent rows.
+//   10. Update chemical.currentBalance to newCurrentBalance and
+//       chemical.currentOutBalance to newOutBalance.
+//   11. Commit the Prisma transaction and return the created row.
 export async function recordTransaction(
   chemicalId: string,
-  input: StockInInput | UsageInput,
+  input: AnyInput,
   type: TransactionType
 ) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -80,11 +147,9 @@ export async function recordTransaction(
 
     const chemical = await tx.chemical.findUniqueOrThrow({ where: { id: chemicalId } });
     const currentBalance = Number(chemical.currentBalance);
+    const currentOutBalance = Number(chemical.currentOutBalance);
 
-    const quantity =
-      type === 'STOCK_IN'
-        ? (input as StockInInput).quantityReceived
-        : (input as UsageInput).quantityUsed;
+    const quantity = quantityFor(type, input);
 
     const maxSeq = await tx.transaction.aggregate({
       where: { chemicalId },
@@ -92,23 +157,26 @@ export async function recordTransaction(
     });
     const nextSequenceNo = (maxSeq._max.sequenceNo ?? 0) + 1;
 
-    let balanceOut: number;
+    const newCurrentBalance = computeNewCurrentBalance(currentBalance, type, quantity);
+
+    let newOutBalance: number;
     let balanceOverridden: boolean;
     if (input.balanceOut !== undefined && input.balanceOut !== null) {
-      balanceOut = input.balanceOut;
+      newOutBalance = input.balanceOut;
       balanceOverridden = true;
     } else {
-      balanceOut = computeNewBalance(currentBalance, type, quantity);
+      newOutBalance = computeNewOutBalance(currentOutBalance, type, quantity);
       balanceOverridden = false;
     }
 
-    const isOverdrawn = type === 'USAGE' && balanceOut < 0;
+    const isOverdrawn = type === 'USAGE' && newOutBalance < 0;
 
     const data: Prisma.TransactionUncheckedCreateInput = {
       chemicalId,
       type,
       sequenceNo: nextSequenceNo,
-      balanceOut,
+      balanceOut: newOutBalance,
+      currentBalanceAfter: newCurrentBalance,
       balanceOverridden,
       isOverdrawn,
     };
@@ -123,7 +191,7 @@ export async function recordTransaction(
       data.truckerCarrier = stockIn.truckerCarrier ?? null;
       data.lotBatchNo = stockIn.lotBatchNo;
       data.quantityReceived = stockIn.quantityReceived;
-    } else {
+    } else if (type === 'USAGE') {
       const usage = input as UsageInput;
       const dateUsed = usage.dateUsed ? toManilaDateOnly(usage.dateUsed) : getTodayManila();
       data.dateUsed = new Date(`${dateUsed}T00:00:00.000Z`);
@@ -131,13 +199,21 @@ export async function recordTransaction(
       data.workOrderNo = usage.workOrderNo ?? null;
       data.lotBatchNoUsed = usage.lotBatchNoUsed ?? null;
       data.quantityUsed = usage.quantityUsed;
+    } else {
+      const replenish = input as ReplenishInput;
+      const dateReplenished = replenish.dateReplenished
+        ? toManilaDateOnly(replenish.dateReplenished)
+        : getTodayManila();
+      data.dateReplenished = new Date(`${dateReplenished}T00:00:00.000Z`);
+      data.quantityReplenished = replenish.quantityReplenished;
+      data.replenishNotes = replenish.replenishNotes ?? null;
     }
 
     const created = await tx.transaction.create({ data });
 
     await tx.chemical.update({
       where: { id: chemicalId },
-      data: { currentBalance: balanceOut },
+      data: { currentBalance: newCurrentBalance, currentOutBalance: newOutBalance },
     });
 
     return created;
@@ -147,32 +223,39 @@ export async function recordTransaction(
 // def recalculateChain(): Input is one chemical id (string) and one number
 // (fromSequenceNo — the sequenceNo of the transaction that was just
 // edited or deleted). Output is a Promise resolving to none (side effect:
-// rewrites balanceOut on every later transaction for that chemical, and
-// updates chemical.currentBalance).
+// rewrites both balance chains on every later transaction for that
+// chemical, and updates chemical.currentBalance /
+// chemical.currentOutBalance).
 // Pseudocode:
 //   1. Lock the chemical row (same concurrency concern as
 //      recordTransaction step 1).
 //   2. Find the transaction immediately before fromSequenceNo (the last
-//      row with sequenceNo < fromSequenceNo) to use as the starting
-//      balance. If none exists, the starting balance is 0.
+//      row with sequenceNo < fromSequenceNo) to use as the starting point
+//      for BOTH chains. If none exists, both start at 0.
 //   3. Fetch every transaction for this chemical with
 //      sequenceNo >= fromSequenceNo, ordered ascending by sequenceNo.
-//   4. Walk the list in order, tracking a running `baseline` balance
-//      (starting from step 2's value). For each row:
-//        a. If row.balanceOverridden is true, do NOT recompute its
-//           balanceOut — treat its existing overridden value as the new
-//           baseline and move on (an override is sticky, it doesn't get
-//           silently undone by a later edit elsewhere in the chain).
-//        b. Otherwise, recompute balanceOut = computeNewBalance(baseline,
-//           row.type, its quantity field) and update isOverdrawn
-//           accordingly (true if type is USAGE and the new balanceOut is
-//           negative).
-//        c. Set `baseline` to this row's (possibly just-recomputed)
-//           balanceOut before moving to the next row.
+//   4. Walk the list in order, tracking two running baselines (current
+//      balance, out balance), starting from step 2's values. For each
+//      row:
+//        a. Current Balance is never overridden — always recompute
+//           currentBalanceAfter = computeNewCurrentBalance(baseline,
+//           row.type, its quantity field).
+//        b. If row.balanceOverridden is true, do NOT recompute its
+//           Out Balance (balanceOut) — treat its existing overridden
+//           value as the new out-balance baseline and move on (an
+//           override is sticky, it doesn't get silently undone by a
+//           later edit elsewhere in the chain).
+//        c. Otherwise, recompute balanceOut =
+//           computeNewOutBalance(outBaseline, row.type, its quantity
+//           field) and update isOverdrawn accordingly (true if type is
+//           USAGE and the new balanceOut is negative).
+//        d. Advance both baselines to this row's (possibly
+//           just-recomputed) values before moving to the next row.
 //   5. Persist all updated rows within the same Prisma transaction.
-//   6. Set chemical.currentBalance to the final row's balanceOut (or the
-//      step-2 baseline if the fetched list was empty, i.e. this chemical
-//      has no transactions left at or after fromSequenceNo).
+//   6. Set chemical.currentBalance / chemical.currentOutBalance to the
+//      final row's values (or the step-2 baselines if the fetched list
+//      was empty, i.e. this chemical has no transactions left at or
+//      after fromSequenceNo).
 //   7. Commit.
 export async function recalculateChain(chemicalId: string, fromSequenceNo: number): Promise<void> {
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -182,7 +265,8 @@ export async function recalculateChain(chemicalId: string, fromSequenceNo: numbe
       where: { chemicalId, sequenceNo: { lt: fromSequenceNo } },
       orderBy: { sequenceNo: 'desc' },
     });
-    let baseline = previous ? Number(previous.balanceOut) : 0;
+    let currentBaseline = previous ? Number(previous.currentBalanceAfter) : 0;
+    let outBaseline = previous ? Number(previous.balanceOut) : 0;
 
     const rows = await tx.transaction.findMany({
       where: { chemicalId, sequenceNo: { gte: fromSequenceNo } },
@@ -190,43 +274,61 @@ export async function recalculateChain(chemicalId: string, fromSequenceNo: numbe
     });
 
     for (const row of rows) {
-      let newBalanceOut: number;
-      let newIsOverdrawn: boolean;
+      const quantity =
+        row.type === 'STOCK_IN'
+          ? Number(row.quantityReceived)
+          : row.type === 'USAGE'
+            ? Number(row.quantityUsed)
+            : Number(row.quantityReplenished);
 
+      const newCurrentBalance = computeNewCurrentBalance(currentBaseline, row.type, quantity);
+
+      let newOutBalance: number;
+      let newIsOverdrawn: boolean;
       if (row.balanceOverridden) {
-        newBalanceOut = Number(row.balanceOut);
+        newOutBalance = Number(row.balanceOut);
         newIsOverdrawn = row.isOverdrawn;
       } else {
-        const quantity =
-          row.type === 'STOCK_IN' ? Number(row.quantityReceived) : Number(row.quantityUsed);
-        newBalanceOut = computeNewBalance(baseline, row.type, quantity);
-        newIsOverdrawn = row.type === 'USAGE' && newBalanceOut < 0;
+        newOutBalance = computeNewOutBalance(outBaseline, row.type, quantity);
+        newIsOverdrawn = row.type === 'USAGE' && newOutBalance < 0;
       }
 
       await tx.transaction.update({
         where: { id: row.id },
-        data: { balanceOut: newBalanceOut, isOverdrawn: newIsOverdrawn },
+        data: {
+          balanceOut: newOutBalance,
+          currentBalanceAfter: newCurrentBalance,
+          isOverdrawn: newIsOverdrawn,
+        },
       });
 
-      baseline = newBalanceOut;
+      currentBaseline = newCurrentBalance;
+      outBaseline = newOutBalance;
     }
 
     await tx.chemical.update({
       where: { id: chemicalId },
-      data: { currentBalance: baseline },
+      data: { currentBalance: currentBaseline, currentOutBalance: outBaseline },
     });
   });
 }
 
+function schemaForType(type: TransactionType) {
+  if (type === 'STOCK_IN') return stockInUpdateSchema;
+  if (type === 'USAGE') return usageUpdateSchema;
+  return replenishUpdateSchema;
+}
+
 // def editTransaction(): Input is one transaction id (string) and one
-// partial update object (a subset of StockInInput/UsageInput fields,
-// and/or a manual balanceOut override). Output is a Promise resolving to
-// the updated Transaction row.
+// partial update object (a subset of StockInInput/UsageInput/
+// ReplenishInput fields, and/or a manual balanceOut override). Output is
+// a Promise resolving to the updated Transaction row.
 // Pseudocode:
 //   1. Load the existing transaction; throw a "not found" error if
 //      missing.
 //   2. Validate `updates` against the schema matching its existing `type`
-//      (stockInUpdateSchema or usageUpdateSchema from lib/validation.ts).
+//      (stockInUpdateSchema, usageUpdateSchema, or replenishUpdateSchema
+//      from lib/validation.ts).
 //   3. Compute a diff of changed fields (old value -> new value) and
 //      append an entry to editHistory (a JSON array); set edited = true.
 //   4. Apply the updates to the row's fields.
@@ -242,7 +344,7 @@ export async function editTransaction(transactionId: string, updates: Record<str
     throw new Error('Transaction not found');
   }
 
-  const schema = existing.type === 'STOCK_IN' ? stockInUpdateSchema : usageUpdateSchema;
+  const schema = schemaForType(existing.type);
   const validated = schema.parse(updates);
 
   const editHistory: Array<{ field: string; oldValue: unknown; newValue: unknown; editedAt: string }> =
@@ -250,6 +352,7 @@ export async function editTransaction(transactionId: string, updates: Record<str
   const now = new Date().toISOString();
 
   const data: Prisma.TransactionUpdateInput = {};
+  const dateFields = new Set(['dateReceived', 'dateUsed', 'dateReplenished']);
 
   for (const [field, value] of Object.entries(validated)) {
     if (value === undefined) continue;
@@ -257,13 +360,12 @@ export async function editTransaction(transactionId: string, updates: Record<str
     let oldValue: unknown = (existing as Record<string, unknown>)[field];
     let newValue: unknown = value;
 
-    if (field === 'dateReceived' || field === 'dateUsed') {
+    if (dateFields.has(field)) {
       const normalized = toManilaDateOnly(value as string);
       newValue = normalized;
       (data as Record<string, unknown>)[field] = new Date(`${normalized}T00:00:00.000Z`);
-      oldValue = existing[field as 'dateReceived' | 'dateUsed']
-        ? toManilaDateOnly(existing[field as 'dateReceived' | 'dateUsed'] as Date)
-        : null;
+      const existingDate = existing[field as 'dateReceived' | 'dateUsed' | 'dateReplenished'];
+      oldValue = existingDate ? toManilaDateOnly(existingDate as Date) : null;
     } else {
       (data as Record<string, unknown>)[field] = value;
     }
@@ -278,7 +380,7 @@ export async function editTransaction(transactionId: string, updates: Record<str
     data.balanceOverridden = true;
   }
 
-  const updated = await prisma.transaction.update({
+  await prisma.transaction.update({
     where: { id: transactionId },
     data,
   });
@@ -290,7 +392,7 @@ export async function editTransaction(transactionId: string, updates: Record<str
 
 // def deleteTransaction(): Input is one transaction id (string). Output is
 // a Promise resolving to none (side effect: removes the row and cascades
-// a balance recalculation).
+// a recalculation of both balance chains).
 // Pseudocode:
 //   1. Load the transaction; throw a "not found" error if missing.
 //   2. Note its chemicalId and sequenceNo.
@@ -298,8 +400,8 @@ export async function editTransaction(transactionId: string, updates: Record<str
 //   4. Call recalculateChain(chemicalId, sequenceNo) so every later row
 //      (which now has one fewer predecessor) is recomputed. If this was
 //      the last row for the chemical, recalculateChain naturally resets
-//      chemical.currentBalance to the new last row's balanceOut (or 0 if
-//      none remain).
+//      chemical.currentBalance / chemical.currentOutBalance to the new
+//      last row's values (or 0 if none remain).
 export async function deleteTransaction(transactionId: string): Promise<void> {
   const existing = await prisma.transaction.findUnique({ where: { id: transactionId } });
   if (!existing) {

@@ -6,25 +6,41 @@ A single-user, cloud-hosted chemical inventory ledger. It mimics — and
 exports as PDF in the same layout as — a PDEA Register 2-13 form
 ("Records required of a P3/P5-IM/P6 license holders"), the paper register
 Philippine precursor-chemical license holders are required to keep. Each
-chemical has its own running ledger of stock-in and usage instances, with
-an automatically maintained running balance.
+chemical has its own running ledger of stock-in, usage, and replenish
+instances, with two automatically maintained running balances (see below).
 
 Core ideas the implementation is built around:
 
+- **Two independent running balances per chemical**: "Current Balance"
+  (total inventory on hand — `Chemical.currentBalance` /
+  `Transaction.currentBalanceAfter`) and "Current Out Balance" (the
+  amount currently decanted into the smaller day-to-day working
+  container — `Chemical.currentOutBalance` / `Transaction.balanceOut`).
+  STOCK_IN only affects Current Balance; REPLENISH (moving stock from
+  bulk into the working container) only affects Current Out Balance;
+  USAGE affects both, since a real withdrawal is drawn from the working
+  container and also depletes total inventory. `Transaction.balanceOut`
+  is what prints in the exported PDF's "Balance (Out)" column, and
+  REPLENISH rows are excluded from that export entirely — see
+  `src/lib/balance.ts` for the full reasoning and
+  `src/lib/pdf/chemicalDocument.ts` for the export's IN/OUT/Initial
+  Stock/Balance Forwarded formulas (confirmed against a real reference
+  export).
 - **One shared `transactions` table, not one table per chemical.** The
   spec describes "a database per chemical," but a shared table with a
   `chemicalId` foreign key is functionally identical from the user's
   perspective (filtering by chemical = "that chemical's database") while
   staying maintainable as chemicals are added.
-- **`balanceOut` is stored on every transaction row at write-time**, not
-  recomputed live from full history on every read. The ledger's source of
-  truth is insertion order (`sequenceNo`), not the user-editable date
-  fields. This is what makes backdated entries, edits, deletions, and the
-  5-year purge all safe without corrupting the running balance — see
-  `src/lib/balance.ts` for the full reasoning.
-- **A stock-in and a usage on the same calendar day are always two
-  separate rows.** Each transaction row only ever populates one field
-  group (stock-in fields OR usage fields), never both.
+- **Both balance chains are stored on every transaction row at
+  write-time**, not recomputed live from full history on every read. The
+  ledger's source of truth is insertion order (`sequenceNo`), not the
+  user-editable date fields. This is what makes backdated entries, edits,
+  deletions, and the 5-year purge all safe without corrupting the running
+  balances — see `src/lib/balance.ts` for the full reasoning.
+- **A stock-in, a usage, and a replenish on the same calendar day are
+  always separate rows.** Each transaction row only ever populates one
+  field group (stock-in fields, usage fields, OR replenish fields), never
+  more than one.
 - **Nothing is ever hard-deleted except via the manual 5-year purge**,
   which itself forces a backup download before anything is removed.
   Archiving a chemical is a soft-delete (`isArchived`).
@@ -84,7 +100,7 @@ chemical-tracker/
 │   │       └── bulkExport.ts  # builds the bulk ZIP — STUB
 │   ├── app/
 │   │   ├── layout.tsx, globals.css, page.tsx (dashboard), login/
-│   │   ├── chemicals/new/, chemicals/[id]/ (detail, log-usage, log-stock-in, edit)
+│   │   ├── chemicals/new/, chemicals/[id]/ (detail, log-usage, log-stock-in, log-replenish, edit)
 │   │   ├── admin/settings/, admin/purge/
 │   │   └── api/                # one route.ts per endpoint — all STUB
 │   └── components/             # reusable UI pieces — all STUB where they hold logic
@@ -182,12 +198,13 @@ Visit `http://localhost:3000`, log in with `DEFAULT_ADMIN_PASSWORD`.
 
 ## Known open items
 
-- **The exact "Initial Stock/Balance Forwarded" figure(s) on exports.**
-  The reference PDEA form showed two numbers there whose exact meaning
-  wasn't confirmed before this skeleton was built. `src/lib/pdf/
-  chemicalDocument.ts` currently only computes a single
-  balance-as-of-range-start figure — revisit its header layout once
-  that's clarified.
+- ~~The exact "Initial Stock/Balance Forwarded" figure(s) on exports~~ —
+  **resolved.** The reference form's two numbers are "Initial Stock" (the
+  Current Balance just before the report's range) and "Balance
+  Forwarded" (`IN + finalEntryBalanceOut + InitialStock - OUT`, where
+  `OUT` is itself the Current Out Balance just before the range, not a
+  sum of usage). Verified against a real multi-month reference export.
+  See the module comment at the top of `src/lib/pdf/chemicalDocument.ts`.
 - **Table print order.** The dashboard/history view is newest-first; the
   exported PDF is chronological (oldest-first), matching how a paper
   ledger reads. This is intentional and confirmed fine to differ, but

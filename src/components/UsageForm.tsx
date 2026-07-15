@@ -16,13 +16,16 @@ interface UsageFormProps {
   onSubmit: (payload: Record<string, unknown>) => void;
 }
 
-// def computeLiveBalance(): Input is one number (currentBalance) and one
-// number (quantityUsed). Output is one number (currentBalance -
-// quantityUsed) — client-side mirror of lib/balance.computeNewBalance
-// for USAGE, for instant visual feedback only.
-// Pseudocode: return currentBalance - quantityUsed.
-function computeLiveBalance(currentBalance: number, quantityUsed: number): number {
-  return currentBalance - quantityUsed;
+// def computeLiveBalance(): Input is one number (currentOutBalance) and
+// one number (quantityUsed). Output is one number (currentOutBalance -
+// quantityUsed) — client-side mirror of
+// lib/balance.computeNewOutBalance for USAGE, for instant visual
+// feedback only. A usage draws from the smaller working container
+// ("Current Out Balance"), which is what the "Balance (Out)" field
+// tracks — not the total inventory ("Current Balance").
+// Pseudocode: return currentOutBalance - quantityUsed.
+function computeLiveBalance(currentOutBalance: number, quantityUsed: number): number {
+  return currentOutBalance - quantityUsed;
 }
 
 export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
@@ -34,16 +37,17 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
     quantityUsed: '',
     balanceOut: '',
   });
-  const [currentBalance, setCurrentBalance] = useState(0);
+  const [currentOutBalance, setCurrentOutBalance] = useState(0);
   const [balanceOverridden, setBalanceOverridden] = useState(false);
 
   // def loadDefaults(): mirrors StockInForm.loadDefaults — fetches the
-  // chemical's currentBalance and seeds form.dateUsed to today (Manila).
+  // chemical's currentOutBalance (the figure a usage actually draws
+  // from) and seeds form.dateUsed to today (Manila).
   async function loadDefaults(): Promise<void> {
     const response = await fetch(`/api/chemicals/${chemicalId}`);
     if (response.ok) {
       const chemical = await response.json();
-      setCurrentBalance(Number(chemical.currentBalance));
+      setCurrentOutBalance(Number(chemical.currentOutBalance));
     }
 
     // Mirrors src/lib/timezone.ts's getTodayManila() on the client, since
@@ -65,7 +69,7 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
       if (key === 'quantityUsed' && !balanceOverridden) {
         const qty = Number(value);
         next.balanceOut = Number.isFinite(qty)
-          ? String(computeLiveBalance(currentBalance, qty))
+          ? String(computeLiveBalance(currentOutBalance, qty))
           : '';
       }
       return next;
