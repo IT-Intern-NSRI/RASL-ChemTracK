@@ -51,3 +51,36 @@ export function toManilaDateOnly(input: Date | string): string {
   const date = typeof input === 'string' ? new Date(input) : input;
   return formatInTimeZone(date, APP_TIMEZONE, 'yyyy-MM-dd');
 }
+
+const MONTH_ABBREVIATIONS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+// def formatMonthRangeLabel(): Input is two strings (startDate, endDate,
+// both "YYYY-MM-DD" — the resolved calendar-day boundaries of a
+// month-mode export, i.e. the 1st of the start month and the last day of
+// the end month). Output is one abbreviated month-range label string,
+// e.g. "Jan - Jun, 2024" when both months fall in the same year, or
+// "Nov 2023 - Feb 2024" when the range spans a year boundary. Used to
+// replace the "Date: <start> to <end>" header on exports generated in
+// "Month Selection" mode.
+// Pseudocode:
+//   1. Parse the year and month out of each date string directly (no
+//      Date object / timezone conversion needed — these are already
+//      plain "YYYY-MM-DD" calendar strings).
+//   2. Look up each month's abbreviation from MONTH_ABBREVIATIONS.
+//   3. If both years match, return "<startAbbr> - <endAbbr>, <year>".
+//      Otherwise return "<startAbbr> <startYear> - <endAbbr> <endYear>".
+export function formatMonthRangeLabel(startDate: string, endDate: string): string {
+  const [startYear, startMonth] = startDate.split('-').map(Number);
+  const [endYear, endMonth] = endDate.split('-').map(Number);
+
+  const startAbbr = MONTH_ABBREVIATIONS[startMonth - 1];
+  const endAbbr = MONTH_ABBREVIATIONS[endMonth - 1];
+
+  if (startYear === endYear) {
+    return `${startAbbr} - ${endAbbr}, ${startYear}`;
+  }
+  return `${startAbbr} ${startYear} - ${endAbbr} ${endYear}`;
+}

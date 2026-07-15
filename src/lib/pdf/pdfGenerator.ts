@@ -11,6 +11,7 @@ import PdfPrinter from 'pdfmake';
 import { TDocumentDefinitions } from 'pdfmake/interfaces';
 import { prisma } from '../prisma';
 import { buildChemicalDocDefinition } from './chemicalDocument';
+import { formatMonthRangeLabel } from '../timezone';
 
 // Font descriptors pdfmake needs — point these at the .ttf files described
 // in fonts/README.md.
@@ -52,9 +53,13 @@ export function renderDocDefinitionToBuffer(docDefinition: TDocumentDefinitions)
   });
 }
 
-// def generateChemicalPdf(): Input is one chemical id (string) and one
-// export date range (startDate, endDate as "YYYY-MM-DD" strings). Output
-// is a Promise resolving to one Buffer (the finished PDF for that
+// def generateChemicalPdf(): Input is one chemical id (string), one
+// export date range (startDate, endDate as "YYYY-MM-DD" strings — always
+// already-resolved concrete calendar-day boundaries, even in "Month
+// Selection" mode, where the caller resolves the chosen months into the
+// 1st of the start month and the last day of the end month before
+// calling this), and one rangeType ('date' | 'month', default 'date').
+// Output is a Promise resolving to one Buffer (the finished PDF for that
 // chemical).
 // Pseudocode:
 //   1. Fetch the chemical by id from Prisma; throw a "not found" error if
@@ -79,13 +84,18 @@ export function renderDocDefinitionToBuffer(docDefinition: TDocumentDefinitions)
 //          figure — the Current Out Balance prior to this report's first
 //          entry, NOT a sum of usage within the range.
 //      Both default to 0 if no prior transaction exists.
-//   5. Call buildChemicalDocDefinition() with all of the above assembled
+//   5. If rangeType === 'month', compute dateLabel via
+//      formatMonthRangeLabel(startDate, endDate) (e.g. "Jan - Jun,
+//      2024"); otherwise leave dateLabel undefined so the header falls
+//      back to the literal "Date: <start> to <end>" text.
+//   6. Call buildChemicalDocDefinition() with all of the above assembled
 //      into a ChemicalDocOptions object.
-//   6. Call renderDocDefinitionToBuffer() on the result and return it.
+//   7. Call renderDocDefinitionToBuffer() on the result and return it.
 export async function generateChemicalPdf(
   chemicalId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  rangeType: 'date' | 'month' = 'date'
 ): Promise<Buffer> {
   const chemical = await prisma.chemical.findUnique({ where: { id: chemicalId } });
   if (!chemical) {
@@ -128,11 +138,14 @@ export async function generateChemicalPdf(
   const initialCurrentBalance = priorTransaction ? Number(priorTransaction.currentBalanceAfter) : 0;
   const initialOutBalance = priorTransaction ? Number(priorTransaction.balanceOut) : 0;
 
+  const dateLabel = rangeType === 'month' ? formatMonthRangeLabel(startDate, endDate) : undefined;
+
   const docDefinition = buildChemicalDocDefinition({
     chemical,
     transactions,
     startDate,
     endDate,
+    dateLabel,
     initialCurrentBalance,
     initialOutBalance,
     settings,

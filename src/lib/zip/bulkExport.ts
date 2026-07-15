@@ -16,9 +16,13 @@ function sanitizeFilename(name: string): string {
 }
 
 // def generateBulkExportZip(): Input is one export date range (startDate,
-// endDate as "YYYY-MM-DD" strings) and one optional array of chemical ids
-// (if omitted, every non-archived chemical is included). Output is a
-// Promise resolving to one Buffer containing the ZIP file's bytes.
+// endDate as "YYYY-MM-DD" strings — always already-resolved concrete
+// calendar-day boundaries, even in "Month Selection" mode), one optional
+// array of chemical ids (if omitted, every non-archived chemical is
+// included), and one rangeType ('date' | 'month', default 'date',
+// forwarded unchanged to each PDF so its header prints the right thing).
+// Output is a Promise resolving to one Buffer containing the ZIP file's
+// bytes.
 // Pseudocode:
 //   1. Determine the target chemical list: if chemicalIds was provided,
 //      fetch exactly those; otherwise fetch all chemicals where
@@ -30,7 +34,8 @@ function sanitizeFilename(name: string): string {
 //   3. For each chemical in the target list (sequentially, or with
 //      bounded concurrency to avoid spiking memory on the free-tier
 //      host):
-//        a. Call generateChemicalPdf(chemical.id, startDate, endDate).
+//        a. Call generateChemicalPdf(chemical.id, startDate, endDate,
+//           rangeType).
 //        b. archive.append(pdfBuffer, { name: `${sanitizedName}.pdf` })
 //           where sanitizedName strips characters that are unsafe in
 //           filenames from chemical.name.
@@ -40,7 +45,8 @@ function sanitizeFilename(name: string): string {
 export async function generateBulkExportZip(
   startDate: string,
   endDate: string,
-  chemicalIds?: string[]
+  chemicalIds?: string[],
+  rangeType: 'date' | 'month' = 'date'
 ): Promise<Buffer> {
   const chemicals = chemicalIds
     ? await prisma.chemical.findMany({ where: { id: { in: chemicalIds } } })
@@ -59,7 +65,7 @@ export async function generateBulkExportZip(
   archive.pipe(passthrough);
 
   for (const chemical of chemicals) {
-    const pdfBuffer = await generateChemicalPdf(chemical.id, startDate, endDate);
+    const pdfBuffer = await generateChemicalPdf(chemical.id, startDate, endDate, rangeType);
     archive.append(pdfBuffer, { name: `${sanitizeFilename(chemical.name)}.pdf` });
   }
 

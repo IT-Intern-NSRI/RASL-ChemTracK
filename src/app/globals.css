@@ -597,6 +597,11 @@ tbody tr:hover {
   min-width: 260px;
 }
 
+.export__mode-toggle {
+  display: flex;
+  gap: 0.4rem;
+}
+
 .date-range {
   display: flex;
   flex-direction: column;

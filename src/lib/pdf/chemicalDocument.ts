@@ -46,6 +46,7 @@ export interface ChemicalDocOptions {
   transactions: Transaction[]; // pre-filtered to the export date range, chronological order, ALL types (including REPLENISH — needed for the Balance Forwarded figure even though replenish rows aren't individually displayed)
   startDate: string; // "YYYY-MM-DD"
   endDate: string; // "YYYY-MM-DD"
+  dateLabel?: string; // when the export was requested in "Month Selection" mode, this is the pre-formatted abbreviated month-range label (e.g. "Jan - Jun, 2024") to print in the header instead of the literal startDate/endDate
   initialCurrentBalance: number; // currentBalanceAfter of the last transaction dated before startDate (0 if none) — "Initial Stock"
   initialOutBalance: number; // balanceOut of the last transaction dated before startDate (0 if none) — the top "OUT (L)" figure
   settings: AppSettings;
@@ -107,6 +108,7 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
     transactions,
     startDate,
     endDate,
+    dateLabel,
     initialCurrentBalance,
     initialOutBalance,
     settings,
@@ -193,7 +195,7 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
           alignment: 'right',
           stack: [
             { text: `Page No. ${currentPage}`, fontSize: 8 },
-            { text: `Date: ${startDate} to ${endDate}`, fontSize: 8 },
+            { text: dateLabel ? `Date: ${dateLabel}` : `Date: ${startDate} to ${endDate}`, fontSize: 8 },
           ],
         },
       ],

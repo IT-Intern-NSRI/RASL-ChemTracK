@@ -92,3 +92,22 @@ export const dateRangeSchema = z
     message: 'startDate must be before or equal to endDate',
   });
 export type DateRangeInput = z.infer<typeof dateRangeSchema>;
+
+// Used by both export endpoints (single-chemical PDF and bulk ZIP).
+// `startDate`/`endDate` are always resolved, concrete "YYYY-MM-DD"
+// calendar-day boundaries by the time they reach the server — in "Month
+// Selection" mode the client resolves the chosen start/end months into
+// the 1st of the start month and the last day of the end month before
+// sending the request. `rangeType` is carried through separately so the
+// PDF generator knows whether to print the abbreviated month-range label
+// ("Jan - Jun, 2024") or the literal date range in the document header.
+export const exportRangeSchema = z
+  .object({
+    startDate: z.string().date(),
+    endDate: z.string().date(),
+    rangeType: z.enum(['date', 'month']).optional().default('date'),
+  })
+  .refine((data) => data.startDate <= data.endDate, {
+    message: 'startDate must be before or equal to endDate',
+  });
+export type ExportRangeInput = z.infer<typeof exportRangeSchema>;

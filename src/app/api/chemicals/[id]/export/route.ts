@@ -5,8 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
-import { dateRangeSchema } from '@/lib/validation';
+import { exportRangeSchema } from '@/lib/validation';
 import { generateChemicalPdf } from '@/lib/pdf/pdfGenerator';
+import { formatMonthRangeLabel } from '@/lib/timezone';
 import { prisma } from '@/lib/prisma';
 import { jsonError } from '@/lib/apiHelpers';
 
@@ -15,17 +16,24 @@ interface RouteParams {
 }
 
 // def GET(): Input is one NextRequest (search params: startDate, endDate,
-// both "YYYY-MM-DD") and the chemical id route param. Output is a Promise
-// resolving to one NextResponse whose body is raw PDF bytes, with headers
-// Content-Type: application/pdf and Content-Disposition: attachment.
+// both "YYYY-MM-DD", plus an optional rangeType of 'date' | 'month' —
+// omitted/anything else defaults to 'date'. In "Month Selection" mode the
+// client has already resolved the chosen months into concrete
+// startDate/endDate boundaries before calling this endpoint; rangeType is
+// only used here to pick the PDF header's label format) and the chemical
+// id route param. Output is a Promise resolving to one NextResponse whose
+// body is raw PDF bytes, with headers Content-Type: application/pdf and
+// Content-Disposition: attachment.
 // Pseudocode:
 //   1. Require auth.
-//   2. Parse + validate startDate/endDate (from search params) with
-//      dateRangeSchema; 400 on failure (including startDate > endDate).
-//   3. Call generateChemicalPdf(params.id, startDate, endDate).
+//   2. Parse + validate startDate/endDate/rangeType (from search params)
+//      with exportRangeSchema; 400 on failure (including startDate >
+//      endDate).
+//   3. Call generateChemicalPdf(params.id, startDate, endDate, rangeType).
 //   4. Build a NextResponse from the returned Buffer with the appropriate
 //      headers, including a filename like
-//      "<chemical-name>_<start>_<end>.pdf".
+//      "<chemical-name>_<start>_<end>.pdf" (date mode) or
+//      "<chemical-name>_<abbreviated-month-range>.pdf" (month mode).
 export async function GET(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
   const params = await paramsPromise;
   if (!(await requireAuth())) {
@@ -33,9 +41,10 @@ export async function GET(request: NextRequest, { params: paramsPromise }: Route
   }
 
   const searchParams = request.nextUrl.searchParams;
-  const parsed = dateRangeSchema.safeParse({
+  const parsed = exportRangeSchema.safeParse({
     startDate: searchParams.get('startDate'),
     endDate: searchParams.get('endDate'),
+    rangeType: searchParams.get('rangeType') ?? undefined,
   });
 
   if (!parsed.success) {
@@ -47,10 +56,14 @@ export async function GET(request: NextRequest, { params: paramsPromise }: Route
     return jsonError('Chemical not found', 404);
   }
 
-  const { startDate, endDate } = parsed.data;
-  const pdfBuffer = await generateChemicalPdf(params.id, startDate, endDate);
+  const { startDate, endDate, rangeType } = parsed.data;
+  const pdfBuffer = await generateChemicalPdf(params.id, startDate, endDate, rangeType);
 
-  const filename = `${chemical.name.replace(/[^a-zA-Z0-9._-]+/g, '_')}_${startDate}_${endDate}.pdf`;
+  const rangePart =
+    rangeType === 'month'
+      ? formatMonthRangeLabel(startDate, endDate).replace(/[^a-zA-Z0-9]+/g, '_')
+      : `${startDate}_${endDate}`;
+  const filename = `${chemical.name.replace(/[^a-zA-Z0-9._-]+/g, '_')}_${rangePart}.pdf`;
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     status: 200,
