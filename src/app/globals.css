@@ -719,6 +719,12 @@ tbody tr:hover {
   animation: splash-suffix-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Accent the "trac" portion of the prefix so it matches the K */
+.splash-word__prefix-accent {
+  color: var(--color-accent);
+  display: inline-block;
+}
+
 @keyframes splash-suffix-in {
   from {
     opacity: 0;

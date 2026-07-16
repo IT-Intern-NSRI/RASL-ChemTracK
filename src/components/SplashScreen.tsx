@@ -53,7 +53,8 @@ export function SplashScreen() {
     <div className="splash-overlay" data-hidden={hidden} aria-hidden="true">
       <span className="splash-word">
         <span className="splash-word__prefix" data-revealed={revealed}>
-          Chemtrac
+          Chem
+          <span className="splash-word__prefix-accent">trac</span>
         </span>
         <span className="splash-word__suffix">K</span>
       </span>
