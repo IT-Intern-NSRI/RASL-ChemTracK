@@ -126,7 +126,7 @@ function headerCell(columnIndex: number, unit: string) {
     };
   }
   const label = columnIndex === 4 ? `${COLUMN_LABELS[columnIndex]} (${unit})` : COLUMN_LABELS[columnIndex];
-  return { text: label, alignment: 'center' as const, style: 'tableHeader' };
+  return { text: label, alignment: 'center' as const, style: 'tableHeader', margin: [0, 5.5, 0, 0] };
 }
 
 // Rounds to 4 decimal places (matching the schema's Decimal(14,4) columns)
@@ -155,12 +155,24 @@ function summaryRowTable(
       widths: COLUMN_WIDTHS,
       body: [
         [
-          { text: [{ text: `IN (${unit}) `, bold: true, italics: true }, { text: fmtNum(totalIn) }] },
+          {
+            text: [
+              { text: `IN (${unit}) `, bold: true, italics: true },
+              { text: fmtNum(totalIn) },
+            ],
+            fontSize: 13,
+          },
           '',
           '',
           '',
           '',
-          { text: [{ text: `OUT (${unit}) `, bold: true, italics: true }, { text: fmtNum(initialOutBalance) }] },
+          {
+            text: [
+              { text: `OUT (${unit}) `, bold: true, italics: true },
+              { text: fmtNum(initialOutBalance) },
+            ],
+            fontSize: 13,
+          },
           '',
           {
             text: `Initial Stock/Balance Forwarded: (${unit})`,
@@ -168,10 +180,11 @@ function summaryRowTable(
             alignment: 'center',
             bold: true,
             italics: true,
+            fontSize: 13,
           },
           {},
-          { text: fmtNum(initialCurrentBalance), alignment: 'center' },
-          { text: fmtNum(balanceForwarded), alignment: 'center' },
+          { text: fmtNum(initialCurrentBalance), alignment: 'center', fontSize: 13 },
+          { text: fmtNum(balanceForwarded), alignment: 'center', fontSize: 13 },
         ],
       ],
     },
@@ -344,9 +357,9 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
     footer: () => ({
       margin: [50, 0, 30, 0],
       stack: [
-        { text: signatoryLine, bold: true, margin: [0, 6, 0, 0] } as ContentText,
+        { text: signatoryLine, bold: true, fontSize: 13, margin: [0, 6, 0, 0] } as ContentText,
         { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.75 }], margin: [0, 2, 0, 2] },
-        { text: settings.signatoryTitle ?? '', italics: true },
+        { text: settings.signatoryTitle ?? '', italics: true, fontSize: 13 },
       ],
     }),
     styles: {
