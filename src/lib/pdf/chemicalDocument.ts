@@ -181,7 +181,7 @@ function summaryRowTable(
       paddingLeft: () => 1,
       paddingRight: () => 1,
     },
-    margin: [0, 4, 0, 8],
+    margin: [0, 40, 0, 0],
   };
 }
 
