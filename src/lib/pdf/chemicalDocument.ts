@@ -342,9 +342,9 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
     }),
     content,
     footer: () => ({
-      margin: [30, 10, 30, 0],
+      margin: [30, 0, 30, 0],
       stack: [
-        { text: signatoryLine, bold: true, margin: [0, 24, 0, 0] } as ContentText,
+        { text: signatoryLine, bold: true, margin: [0, 6, 0, 0] } as ContentText,
         { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.75 }], margin: [0, 2, 0, 2] },
         { text: settings.signatoryTitle ?? '', italics: true },
       ],
