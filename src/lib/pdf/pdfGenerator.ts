@@ -114,12 +114,14 @@ export async function generateChemicalPdf(
         { type: 'REPLENISH', dateReplenished: { gte: start, lte: end } },
       ],
     },
-    orderBy: [
-      { dateReceived: 'asc' },
-      { dateUsed: 'asc' },
-      { dateReplenished: 'asc' },
-      { sequenceNo: 'asc' },
-    ],
+    // Ordered by sequenceNo — the chain of truth for transaction order
+    // (see lib/balance.ts). dateReceived/dateUsed/dateReplenished are
+    // mutually exclusive nullable columns (only one is populated per
+    // row, matching its type), so sorting by them in sequence bucket
+    // rows by type rather than true chronological/entry order (NULLS
+    // LAST pushes every USAGE/REPLENISH row after every STOCK_IN row,
+    // regardless of actual date). sequenceNo has no such issue.
+    orderBy: [{ sequenceNo: 'asc' }],
   });
 
   const settings = await prisma.appSettings.findUniqueOrThrow({ where: { id: 1 } });
