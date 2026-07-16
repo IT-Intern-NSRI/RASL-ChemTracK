@@ -147,6 +147,7 @@ export function ExportButton({ mode, chemicalId }: ExportButtonProps) {
             <MonthRangePicker onChange={setMonthRange} />
           )}
           <button
+            type="button"
             onClick={handleExport}
             disabled={!resolvedRange?.startDate || !resolvedRange?.endDate}
             className="btn btn-primary btn-sm"
