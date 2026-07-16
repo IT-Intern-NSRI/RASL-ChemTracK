@@ -36,11 +36,12 @@
 //   - "Initial Stock (L)": the Current Balance (total inventory) as of
 //     immediately before this report's date range
 //     (options.initialCurrentBalance).
-//   - "Balance Forwarded (L)": IN + (the last transaction in range's
-//     Balance (Out), of ANY type including REPLENISH, or "OUT (L)" if
-//     there were no transactions in range) + "Initial Stock (L)" -
-//     "OUT (L)". This is what "Initial Stock" becomes on the *next*
-//     report.
+//   - "Balance Forwarded (L)": the Current Balance (total inventory) as
+//     of immediately AFTER this report's date range — i.e. the
+//     currentBalanceAfter of the last transaction in range (any type,
+//     including REPLENISH), or "Initial Stock (L)" unchanged if there
+//     were no transactions in range. This is what "Initial Stock"
+//     becomes on the *next* report.
 
 import { TDocumentDefinitions, ContentTable, ContentText } from 'pdfmake/interfaces';
 import { Chemical, Transaction, AppSettings } from '@prisma/client';
@@ -220,12 +221,18 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
     .filter((t) => t.type === 'STOCK_IN')
     .reduce((sum, t) => sum + Number(t.quantityReceived ?? 0), 0);
 
+  // "Balance Forwarded" is simply the total Current Balance (total
+  // inventory) as of immediately AFTER this report's range — i.e. the
+  // currentBalanceAfter of the last transaction (any type, including
+  // REPLENISH, since REPLENISH still carries a currentBalanceAfter even
+  // though it doesn't change it) dated within [startDate, endDate]. If
+  // there were no transactions in range at all, nothing moved, so it's
+  // just whatever "Initial Stock" already was. This is what "Initial
+  // Stock" becomes on the *next* report.
   const lastTransactionInRange = transactions[transactions.length - 1];
-  const finalEntryBalanceOut = lastTransactionInRange
-    ? Number(lastTransactionInRange.balanceOut)
-    : initialOutBalance;
-
-  const balanceForwarded = totalIn + finalEntryBalanceOut + initialCurrentBalance - initialOutBalance;
+  const balanceForwarded = lastTransactionInRange
+    ? Number(lastTransactionInRange.currentBalanceAfter)
+    : initialCurrentBalance;
 
   const fmtDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '');
 
