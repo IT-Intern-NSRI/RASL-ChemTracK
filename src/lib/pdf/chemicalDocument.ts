@@ -175,12 +175,12 @@ function summaryRowTable(
           },
           '',
           {
-            text: `Initial Stock/Balance Forwarded: (${unit})`,
+            stack: [
+              { text: 'Initial Stock/Balance', bold: true, italics: true, fontSize: 13 },
+              { text: `Forwarded: (${unit})`, bold: true, italics: true, fontSize: 13 },
+            ],
             colSpan: 2,
             alignment: 'center',
-            bold: true,
-            italics: true,
-            fontSize: 13,
           },
           {},
           { text: fmtNum(initialCurrentBalance), alignment: 'center', fontSize: 13 },
