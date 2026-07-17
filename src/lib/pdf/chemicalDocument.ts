@@ -230,8 +230,20 @@ function fmtNum(n: number): string {
   return parseFloat(n.toFixed(4)).toString();
 }
 
+// Renders as "MM/DD/YY" (e.g. "07/16/26"), matching the reference form's
+// date convention. UTC-based (getUTC*, not the local-timezone get*
+// equivalents) since the underlying date fields are stored as UTC
+// midnight instants representing a plain calendar day (see
+// lib/balance.ts / lib/timezone.ts) — using local getters here could
+// shift the displayed day depending on the server's timezone.
 function fmtDate(d: Date | null): string {
-  return d ? d.toISOString().slice(0, 10) : '';
+  if (!d) {
+    return '';
+  }
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${mm}/${dd}/${yy}`;
 }
 
 function cell(value: string, columnIndex: number, italics?: boolean, fontSize?: number) {
@@ -510,7 +522,10 @@ function buildMonthModeContent(options: ChemicalDocMonthOptions, unit: string): 
     }
 
     const daysInMonth = new Date(monthData.year, monthData.month, 0).getDate();
-    const monthPrefix = `${monthData.year}-${String(monthData.month).padStart(2, '0')}`;
+    // "MM/YY" prefix for this month's synthetic empty-day rows, matching
+    // fmtDate()'s "MM/DD/YY" convention.
+    const monthPrefixMM = String(monthData.month).padStart(2, '0');
+    const yearSuffixYY = String(monthData.year).slice(-2);
 
     const monthRows: LogicalRow[] = [];
     let carryBalanceOut = monthData.initialOutBalance;
@@ -525,7 +540,7 @@ function buildMonthModeContent(options: ChemicalDocMonthOptions, unit: string): 
           carryBalanceOut = parsed;
         }
       } else {
-        const dateStr = `${monthPrefix}-${String(day).padStart(2, '0')}`;
+        const dateStr = `${monthPrefixMM}/${String(day).padStart(2, '0')}/${yearSuffixYY}`;
         monthRows.push(syntheticNoUsageRow(dateStr, carryBalanceOut));
         // carryBalanceOut is unchanged — nothing happened this day.
       }
