@@ -26,6 +26,23 @@ function isLowStock(chemical: ChemicalSummary): boolean {
   return chemical.currentBalance <= chemical.lowStockThreshold;
 }
 
+function formatShortDate(value: string | null): string {
+  if (!value) {
+    return '—';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: '2-digit',
+  }).format(date);
+}
+
 export function ChemicalListTable({ chemicals }: ChemicalListTableProps) {
   return (
     <table>
@@ -52,7 +69,7 @@ export function ChemicalListTable({ chemicals }: ChemicalListTableProps) {
             <td data-label="Current Out Balance">
               {chemical.currentOutBalance} {chemical.unit}
             </td>
-            <td data-label="Last Activity">{chemical.lastActivityDate ?? '—'}</td>
+            <td data-label="Last Activity">{formatShortDate(chemical.lastActivityDate)}</td>
           </tr>
         ))}
       </tbody>
