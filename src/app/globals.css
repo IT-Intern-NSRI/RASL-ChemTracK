@@ -574,6 +574,42 @@ tbody tr:hover {
   gap: 0.6rem;
 }
 
+/* ---------- Export progress dialog ---------- */
+
+.dialog--progress {
+  position: relative;
+  text-align: center;
+  padding-top: 2.25rem;
+}
+
+.dialog__close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.export-progress__message {
+  margin-bottom: 1rem;
+}
+
+.export-progress__timer {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  margin-bottom: 1.25rem;
+}
+
+.export-progress__retry-message {
+  margin-bottom: 1rem;
+  color: var(--color-text-muted);
+}
+
 /* ---------- Export / date-range popover ---------- */
 
 .export {
