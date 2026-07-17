@@ -346,7 +346,7 @@ function summaryRowTable(
               { text: `OUT (${unit}) `, bold: true, italics: true, noWrap: true },
               {
                 text: fmtNum(initialOutBalance),
-                margin: [6, 0, 0, 0],
+                margin: [12, 0, 0, 0],
                 noWrap: true,
               },
             ],
