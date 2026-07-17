@@ -180,14 +180,27 @@ const ROWS_PER_PAGE = 23;
 // daysInMonth rows (28-31) shown on as few physical pages as possible —
 // meaningfully more than date-mode's 23-row pages were tuned for — so
 // month-mode tables use tighter cell padding/font size (see `tight` param
-// on buildTableContentBlock) to fit more rows per physical page. This
-// value (and the tight-mode padding/font constants below) are a
-// first-pass estimate, not yet confirmed against a real render the way
-// COLUMN_WIDTHS above was — a month with several multi-entry days could
-// still need more than one physical page, which the chunking logic below
-// handles correctly, but the exact row count that fits on one physical
-// Legal-landscape page may need adjusting after visual QA.
-const MAX_ROWS_PER_MONTH_PAGE = 34;
+// on buildTableContentBlock) to fit more rows per physical page.
+//
+// 33 is not a rough estimate — it's the measured single-physical-page
+// capacity for a Legal-landscape page at TIGHT_ROW_PADDING/
+// TIGHT_ROW_FONT_SIZE below (confirmed by rendering real single-month
+// documents with 28 through 40 rows and checking pdfinfo's page count: 33
+// rows fit on one physical page, 34 forces pdfmake to split the table
+// across two). This value MUST stay at or below that measured capacity —
+// going over it doesn't just make a month spill onto an extra page as
+// intended, it makes pdfmake internally auto-split a single `table`
+// object across pages, which was observed to corrupt EARLIER pages in
+// the same document (extra stroke/rect drawing operations appearing on
+// pages that don't otherwise change) purely because a later table needed
+// to split. Keeping every chunk we hand to pdfmake at or under this
+// measured capacity means pdfmake never needs to auto-split a table
+// itself — chunkRowsMaxSize() below always pre-splits for it, so a month
+// with more real entries than fit on one page still spills onto
+// additional physical pages, just via our own explicit chunk boundaries
+// (each with its own forced pageBreak) rather than pdfmake's internal
+// splitting.
+const MAX_ROWS_PER_MONTH_PAGE = 33;
 const TIGHT_ROW_PADDING = 1.5; // vs. 3 for date-mode
 const TIGHT_ROW_FONT_SIZE = 6.5; // vs. the doc's defaultStyle 7
 
