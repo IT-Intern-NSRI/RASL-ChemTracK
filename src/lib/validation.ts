@@ -96,16 +96,23 @@ export type DateRangeInput = z.infer<typeof dateRangeSchema>;
 // Used by both export endpoints (single-chemical PDF and bulk ZIP).
 // `startDate`/`endDate` are always resolved, concrete "YYYY-MM-DD"
 // calendar-day boundaries by the time they reach the server — in "Month
-// Selection" mode the client resolves the chosen start/end months into
-// the 1st of the start month and the last day of the end month before
-// sending the request. `rangeType` is carried through separately so the
-// PDF generator knows whether to print the abbreviated month-range label
-// ("Jan - Jun, 2024") or the literal date range in the document header.
+// Selection" mode (the only mode the UI exposes) the client resolves the
+// chosen start/end months into the 1st of the start month and the last
+// day of the end month before sending the request. `rangeType` is
+// carried through separately: it picks the PDF's whole pagination
+// strategy (one page per calendar month, with per-month Initial
+// Stock/OUT/Balance Forwarded figures and empty-day fill, for 'month';
+// the original fixed-23-rows-per-page/range-wide-balances layout for
+// 'date') as well as the header's date-range label format. Defaults to
+// 'month' since every export entry point in the app now only offers
+// Month Selection; 'date' is kept fully functional for other callers
+// (the 5-year purge's backup ZIP explicitly requests it, since its date
+// range isn't month-aligned — see lib/purge.ts).
 export const exportRangeSchema = z
   .object({
     startDate: z.string().date(),
     endDate: z.string().date(),
-    rangeType: z.enum(['date', 'month']).optional().default('date'),
+    rangeType: z.enum(['date', 'month']).optional().default('month'),
   })
   .refine((data) => data.startDate <= data.endDate, {
     message: 'startDate must be before or equal to endDate',

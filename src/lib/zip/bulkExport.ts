@@ -19,8 +19,12 @@ function sanitizeFilename(name: string): string {
 // endDate as "YYYY-MM-DD" strings — always already-resolved concrete
 // calendar-day boundaries, even in "Month Selection" mode), one optional
 // array of chemical ids (if omitted, every non-archived chemical is
-// included), and one rangeType ('date' | 'month', default 'date',
-// forwarded unchanged to each PDF so its header prints the right thing).
+// included), and one rangeType ('date' | 'month', default 'month' — every
+// export entry point in the app only offers Month Selection now;
+// forwarded unchanged to each PDF so its header/pagination match). Callers
+// with a date range that isn't month-aligned (the 5-year purge's backup —
+// see lib/purge.ts) must explicitly pass 'date' to get the original
+// fixed-23-rows-per-page layout instead.
 // Output is a Promise resolving to one Buffer containing the ZIP file's
 // bytes.
 // Pseudocode:
@@ -46,7 +50,7 @@ export async function generateBulkExportZip(
   startDate: string,
   endDate: string,
   chemicalIds?: string[],
-  rangeType: 'date' | 'month' = 'date'
+  rangeType: 'date' | 'month' = 'month'
 ): Promise<Buffer> {
   const chemicals = chemicalIds
     ? await prisma.chemical.findMany({ where: { id: { in: chemicalIds } } })

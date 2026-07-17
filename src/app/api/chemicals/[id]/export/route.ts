@@ -17,13 +17,15 @@ interface RouteParams {
 
 // def GET(): Input is one NextRequest (search params: startDate, endDate,
 // both "YYYY-MM-DD", plus an optional rangeType of 'date' | 'month' —
-// omitted/anything else defaults to 'date'. In "Month Selection" mode the
-// client has already resolved the chosen months into concrete
-// startDate/endDate boundaries before calling this endpoint; rangeType is
-// only used here to pick the PDF header's label format) and the chemical
-// id route param. Output is a Promise resolving to one NextResponse whose
-// body is raw PDF bytes, with headers Content-Type: application/pdf and
-// Content-Disposition: attachment.
+// omitted/anything else defaults to 'month' (see exportRangeSchema). In
+// "Month Selection" mode (the only mode the UI exposes) the client has
+// already resolved the chosen months into concrete startDate/endDate
+// boundaries before calling this endpoint; rangeType is forwarded as-is
+// to generateChemicalPdf(), which uses it to pick both the PDF's
+// pagination/balance strategy and the header's date-label format) and
+// the chemical id route param. Output is a Promise resolving to one
+// NextResponse whose body is raw PDF bytes, with headers Content-Type:
+// application/pdf and Content-Disposition: attachment.
 // Pseudocode:
 //   1. Require auth.
 //   2. Parse + validate startDate/endDate/rangeType (from search params)

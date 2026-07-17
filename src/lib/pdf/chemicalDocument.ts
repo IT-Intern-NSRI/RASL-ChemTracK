@@ -2,60 +2,117 @@
 //
 // Builds the pdfmake "document definition" for one chemical's exported
 // register page, matching the layout of the reference PDEA Register 2-13
-// paper form as closely as possible:
-//   - A per-page header (repeats on EVERY page, via pdfmake's `header`
-//     callback): the register label + boilerplate subtitle on the left,
-//     "Page No." + the covered date range on the right; below that the
-//     chemical's full CPECS descriptor (bold, centered), a full-width
-//     rule, the "CPECS (name, form, purity, packaging)" caption (italic,
-//     centered), and the four-figure IN / OUT / Initial Stock/Balance
-//     Forwarded summary row, positioned so each figure sits directly
-//     above the table column it corresponds to. Because this whole block
-//     lives in the `header` callback, it is reprinted in full on every
-//     spillover page, not just the column header row.
-//   - The 11-column transaction table with a fully ruled grid, white
-//     background, and centered column headers. Rows are chunked into
-//     fixed-size pages of ROWS_PER_PAGE (23) each, padded with blank rows
-//     when a chunk (almost always the last one) has fewer entries, so
-//     every page — regardless of how many real entries it holds — shows
-//     exactly 23 rows. REPLENISH transactions are excluded from this
-//     table entirely (they still affect the Out Balance chain other rows
-//     carry, just aren't shown as their own row) — per project decision,
-//     replenish logs never appear in the exported PDF.
+// paper form as closely as possible. There are two independent
+// pagination/balance strategies, chosen via `options.rangeType`:
+//
+// - rangeType: 'date' (the original layout, still used by callers with an
+//   arbitrary — not necessarily month-aligned — date range, e.g. the
+//   5-year purge's backup ZIP; see lib/purge.ts). Rows are chunked into
+//   fixed-size pages of ROWS_PER_PAGE (23) each, blank-padded so every
+//   page shows exactly 23 rows. The IN/OUT/Initial Stock/Balance
+//   Forwarded summary figures are constant across the whole document,
+//   computed once for the entire requested range.
+//
+// - rangeType: 'month' (what every export entry point in the app now
+//   uses — MonthRangePicker only ever produces whole-month ranges). Each
+//   calendar month gets its own page (spilling onto further physical
+//   pages only if that month alone has more rows than fit on one page),
+//   with its OWN IN/OUT/Initial Stock/Balance Forwarded figures
+//   (pre-computed per month by pdfGenerator.ts's buildMonthlyFigures()).
+//   Every day of the month gets at least one row: days with no STOCK_IN/
+//   USAGE activity (REPLENISH-only or fully idle days both count as
+//   "nothing happened", consistent with REPLENISH already being fully
+//   invisible elsewhere in this export) get a synthesized "No usage" row
+//   with Quantity Used = 0 and Balance (Out) carried forward from the
+//   last known value. There is no blank-row padding in this mode — the
+//   per-day fill already guarantees a minimum of daysInMonth rows.
+//
+// Both modes share:
+//   - A per-page header (repeats on EVERY physical page, via pdfmake's
+//     `header` callback): the register label + boilerplate subtitle on
+//     the left, "Page No." + the covered date range on the right (this
+//     date-range text is ALWAYS derived from the overall requested
+//     startDate/endDate — see `dateLabel` below — never from an
+//     individual month, even in 'month' mode where each page covers only
+//     one month's rows); below that the chemical's full CPECS descriptor
+//     (bold, centered), a full-width rule, the "CPECS (name, form,
+//     purity, packaging)" caption (italic, centered), and the four-figure
+//     summary row, positioned so each figure sits directly above the
+//     table column it corresponds to. Because this whole block lives in
+//     the `header` callback, it is reprinted in full on every physical
+//     page, not just the column header row.
+//   - An 11-column transaction table with a fully ruled grid, white
+//     background, and centered column headers. REPLENISH transactions
+//     are excluded from ever populating a row (they still affect the Out
+//     Balance chain other rows carry, just aren't shown as their own
+//     row) — per project decision, replenish logs never appear in the
+//     exported PDF.
 //   - A signature footer: the signatory's name (with credentials
 //     appended on the same line, bold) directly above a short rule, and
 //     the signatory's title directly below the rule in italics.
 //
 // Summary-row definitions (each confirmed against a real reference
-// export spanning several months):
-//   - "IN (L)": sum of quantityReceived across STOCK_IN rows in range.
+// export spanning several months; in 'month' mode, apply per-month
+// instead of per-whole-range):
+//   - "IN (L)": sum of quantityReceived across STOCK_IN rows in
+//     range/month.
 //   - "OUT (L)": NOT a sum of usage. It's the Current Out Balance as of
-//     immediately before this report's date range (i.e.
-//     options.initialOutBalance) — the same figure carries unchanged
-//     across a whole report if no USAGE/REPLENISH occurred in range.
+//     immediately before this page's covered range/month — the same
+//     figure carries unchanged across a whole page if no USAGE/REPLENISH
+//     occurred within it.
 //   - "Initial Stock (L)": the Current Balance (total inventory) as of
-//     immediately before this report's date range
-//     (options.initialCurrentBalance).
+//     immediately before this page's covered range/month.
 //   - "Balance Forwarded (L)": the Current Balance (total inventory) as
-//     of immediately AFTER this report's date range — i.e. the
-//     currentBalanceAfter of the last transaction in range (any type,
-//     including REPLENISH), or "Initial Stock (L)" unchanged if there
-//     were no transactions in range. This is what "Initial Stock"
-//     becomes on the *next* report.
+//     of immediately AFTER this page's covered range/month — i.e. the
+//     currentBalanceAfter of the last transaction in range/month (any
+//     type, including REPLENISH), or "Initial Stock (L)" unchanged if
+//     there were no transactions in range/month. This is what "Initial
+//     Stock" becomes on the *next* page/month.
 
 import { TDocumentDefinitions, ContentTable, ContentText } from 'pdfmake/interfaces';
 import { Chemical, Transaction, AppSettings } from '@prisma/client';
 
-export interface ChemicalDocOptions {
+interface ChemicalDocCommonOptions {
   chemical: Chemical;
-  transactions: Transaction[]; // pre-filtered to the export date range, chronological order, ALL types (including REPLENISH — needed for the Balance Forwarded figure even though replenish rows aren't individually displayed)
-  startDate: string; // "YYYY-MM-DD"
-  endDate: string; // "YYYY-MM-DD"
-  dateLabel?: string; // when the export was requested in "Month Selection" mode, this is the pre-formatted abbreviated month-range label (e.g. "Jan - Jun, 2024") to print in the header instead of the literal startDate/endDate
-  initialCurrentBalance: number; // currentBalanceAfter of the last transaction dated before startDate (0 if none) — "Initial Stock"
-  initialOutBalance: number; // balanceOut of the last transaction dated before startDate (0 if none) — the top "OUT (L)" figure
+  startDate: string; // "YYYY-MM-DD" — the overall requested range's start
+  endDate: string; // "YYYY-MM-DD" — the overall requested range's end
+  // Pre-formatted abbreviated range label (e.g. "Jan - Jun, 2024") shown
+  // in the header's top-right "Date:" line, computed once from the
+  // OVERALL requested range regardless of pagination mode — this never
+  // changes per-page, even in 'month' mode where each page's rows only
+  // cover one month. Undefined falls back to the literal
+  // "Date: <startDate> to <endDate>" text.
+  dateLabel?: string;
   settings: AppSettings;
 }
+
+export interface ChemicalDocDateOptions extends ChemicalDocCommonOptions {
+  rangeType: 'date';
+  transactions: Transaction[]; // pre-filtered to the export date range, chronological order, ALL types (including REPLENISH — needed for the Balance Forwarded figure even though replenish rows aren't individually displayed)
+  initialCurrentBalance: number; // currentBalanceAfter of the last transaction dated before startDate (0 if none) — "Initial Stock"
+  initialOutBalance: number; // balanceOut of the last transaction dated before startDate (0 if none) — the top "OUT (L)" figure
+}
+
+// One calendar month's worth of pre-computed export data, produced by
+// pdfGenerator.ts's buildMonthlyFigures(). Each one becomes exactly one
+// "logical" page (though it may span more than one physical PDF page if
+// it has enough rows) in the exported document.
+export interface ChemicalDocMonthData {
+  year: number;
+  month: number; // 1-12
+  transactions: Transaction[]; // this month's transactions only, chronological order, ALL types (including REPLENISH — needed for the Balance Forwarded figure even though replenish rows aren't individually displayed)
+  initialCurrentBalance: number; // Current Balance strictly before this month — this page's "Initial Stock"
+  initialOutBalance: number; // Current Out Balance strictly before this month — this page's top "OUT (L)" figure
+  totalIn: number; // sum of quantityReceived across this month's STOCK_IN rows — this page's "IN (L)" figure
+  balanceForwarded: number; // Current Balance as of the end of this month
+}
+
+export interface ChemicalDocMonthOptions extends ChemicalDocCommonOptions {
+  rangeType: 'month';
+  months: ChemicalDocMonthData[]; // one entry per calendar month spanned by [startDate, endDate], in chronological order
+}
+
+export type ChemicalDocOptions = ChemicalDocDateOptions | ChemicalDocMonthOptions;
 
 // The fixed 11 columns, in order, matching the reference form. Column 1
 // (index 1, "Supplier Information...") renders as three stacked lines
@@ -83,6 +140,13 @@ export const COLUMN_LABELS = [
 
 const NUM_COLS = COLUMN_LABELS.length;
 
+// Column index of each field referenced by name elsewhere in this module
+// (empty-day synthetic rows, right-alignment rules).
+const COL_DATE_USED = 5;
+const COL_DETAILS_OF_USAGE = 6;
+const COL_QUANTITY_USED = 9;
+const COL_BALANCE_OUT = 10;
+
 // Fixed column widths (in points), measured proportionally off the
 // reference paper form so each column's width matches its real-world
 // counterpart instead of splitting the page evenly. Narrow date/quantity
@@ -98,7 +162,7 @@ const COLUMN_WIDTHS = [65, 220, 96, 69, 44, 60, 135, 63, 66, 47, 49];
 
 // Columns whose values should be right-aligned, matching the reference
 // form's numeric-column convention.
-const RIGHT_ALIGNED_COLUMN_INDICES = new Set([4, 9, 10]);
+const RIGHT_ALIGNED_COLUMN_INDICES = new Set([4, COL_QUANTITY_USED, COL_BALANCE_OUT]);
 
 const DEFAULT_REGISTER_LABEL = 'PDEA P Register 2-13';
 const REGISTER_SUBTITLE = '(Records required of a P3/P5-IM/P6) license holders';
@@ -107,9 +171,25 @@ const GRID_LINE_WIDTH = 0.75;
 const GRID_LINE_COLOR = '#000000';
 const FULL_WIDTH_RULE = 914; // matches the sum of COLUMN_WIDTHS, so the rule lines up with the table's outer edges
 
-// Every export page (including spillover pages) shows exactly this many
-// entry rows, blank-padded when there are fewer real entries.
+// Every date-mode export page (including spillover pages) shows exactly
+// this many entry rows, blank-padded when there are fewer real entries.
+// Only used by rangeType: 'date'.
 const ROWS_PER_PAGE = 23;
+
+// Month-mode's per-page row budget. A calendar month needs at least
+// daysInMonth rows (28-31) shown on as few physical pages as possible —
+// meaningfully more than date-mode's 23-row pages were tuned for — so
+// month-mode tables use tighter cell padding/font size (see `tight` param
+// on buildTableContentBlock) to fit more rows per physical page. This
+// value (and the tight-mode padding/font constants below) are a
+// first-pass estimate, not yet confirmed against a real render the way
+// COLUMN_WIDTHS above was — a month with several multi-entry days could
+// still need more than one physical page, which the chunking logic below
+// handles correctly, but the exact row count that fits on one physical
+// Legal-landscape page may need adjusting after visual QA.
+const MAX_ROWS_PER_MONTH_PAGE = 34;
+const TIGHT_ROW_PADDING = 1.5; // vs. 3 for date-mode
+const TIGHT_ROW_FONT_SIZE = 6.5; // vs. the doc's defaultStyle 7
 
 function headerCell(columnIndex: number, unit: string) {
   if (columnIndex === 1) {
@@ -137,11 +217,80 @@ function fmtNum(n: number): string {
   return parseFloat(n.toFixed(4)).toString();
 }
 
-function cell(value: string, columnIndex: number) {
+function fmtDate(d: Date | null): string {
+  return d ? d.toISOString().slice(0, 10) : '';
+}
+
+function cell(value: string, columnIndex: number, italics?: boolean, fontSize?: number) {
   return {
     text: value,
     alignment: RIGHT_ALIGNED_COLUMN_INDICES.has(columnIndex) ? ('right' as const) : ('left' as const),
+    italics: italics || undefined,
+    fontSize,
   };
+}
+
+// A single table row's 11 column values, plus which (if any) columns
+// should render italicized — used for the "No usage" text in synthetic
+// empty-day rows.
+interface LogicalRow {
+  values: string[]; // length NUM_COLS
+  italicColumns?: Set<number>;
+}
+
+function blankRow(): LogicalRow {
+  return { values: Array(NUM_COLS).fill('') };
+}
+
+function rowForTransaction(t: Transaction): LogicalRow {
+  if (t.type === 'STOCK_IN') {
+    return {
+      values: [
+        fmtDate(t.dateReceived),
+        t.supplierInfo ?? '',
+        t.truckerCarrier ?? '',
+        t.lotBatchNo ?? '',
+        t.quantityReceived !== null ? fmtNum(Number(t.quantityReceived)) : '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        fmtNum(Number(t.balanceOut)),
+      ],
+    };
+  }
+  // USAGE (REPLENISH rows are filtered out before this is ever called)
+  return {
+    values: [
+      '',
+      '',
+      '',
+      '',
+      '',
+      fmtDate(t.dateUsed),
+      t.detailsOfUsage ?? '',
+      t.workOrderNo ?? '',
+      t.lotBatchNoUsed ?? '',
+      t.quantityUsed !== null ? fmtNum(Number(t.quantityUsed)) : '',
+      fmtNum(Number(t.balanceOut)),
+    ],
+  };
+}
+
+// Synthesizes the "nothing happened this day" row for month-mode's
+// per-day fill: Date Used = that date, Details of usage = "No usage"
+// (italicized), Quantity Used = 0, Balance (Out) carried forward from the
+// last known value (a day with only an invisible REPLENISH on it is
+// treated the same as a fully idle day, consistent with REPLENISH being
+// excluded from this export everywhere else).
+function syntheticNoUsageRow(dateStr: string, carriedBalanceOut: number): LogicalRow {
+  const values = Array(NUM_COLS).fill('');
+  values[COL_DATE_USED] = dateStr;
+  values[COL_DETAILS_OF_USAGE] = 'No usage';
+  values[COL_QUANTITY_USED] = '0';
+  values[COL_BALANCE_OUT] = fmtNum(carriedBalanceOut);
+  return { values, italicColumns: new Set([COL_DETAILS_OF_USAGE]) };
 }
 
 function summaryRowTable(
@@ -199,23 +348,95 @@ function summaryRowTable(
   };
 }
 
-// def buildChemicalDocDefinition(): Input is one ChemicalDocOptions object
-// (the chemical record, its in-range transactions of all types in
-// chronological order, the export date range, the two pre-computed
-// opening-balance figures, and the global app settings/signatory info).
-// Output is one pdfmake TDocumentDefinitions object, ready to hand to
-// renderDocDefinitionToBuffer().
-export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocumentDefinitions {
-  const {
-    chemical,
-    transactions,
-    startDate,
-    endDate,
-    dateLabel,
-    initialCurrentBalance,
-    initialOutBalance,
-    settings,
-  } = options;
+// Splits `rows` into pages of exactly `size` rows each, blank-padding the
+// final chunk so every page (including a mostly-empty one) shows the same
+// fixed row count. Used only by rangeType: 'date', which preserves the
+// original fixed-page-size layout.
+function chunkRowsFixedSize(rows: LogicalRow[], size: number): LogicalRow[][] {
+  const chunks: LogicalRow[][] = [];
+  for (let i = 0; i < rows.length; i += size) {
+    chunks.push(rows.slice(i, i + size));
+  }
+  if (chunks.length === 0) {
+    chunks.push([]);
+  }
+  const last = chunks[chunks.length - 1];
+  while (last.length < size) {
+    last.push(blankRow());
+  }
+  return chunks;
+}
+
+// Splits `rows` into pages of AT MOST `maxSize` rows each, with no
+// padding — used by rangeType: 'month', where a month's row count is
+// already guaranteed to be at least daysInMonth (via the per-day fill)
+// and doesn't need artificial padding to a fixed count. Only produces
+// more than one chunk if a single month has more real entries than fit on
+// one physical page.
+function chunkRowsMaxSize(rows: LogicalRow[], maxSize: number): LogicalRow[][] {
+  if (rows.length === 0) {
+    return [[]];
+  }
+  const chunks: LogicalRow[][] = [];
+  for (let i = 0; i < rows.length; i += maxSize) {
+    chunks.push(rows.slice(i, i + maxSize));
+  }
+  return chunks;
+}
+
+function buildTableContentBlock(
+  rows: LogicalRow[],
+  unit: string,
+  pageBreakBefore: boolean,
+  tight: boolean
+) {
+  const tableBody: unknown[][] = [Array.from({ length: NUM_COLS }, (_, i) => headerCell(i, unit))];
+  for (const row of rows) {
+    tableBody.push(
+      row.values.map((v, i) =>
+        cell(v, i, row.italicColumns?.has(i), tight ? TIGHT_ROW_FONT_SIZE : undefined)
+      )
+    );
+  }
+
+  return {
+    table: {
+      headerRows: 1,
+      widths: COLUMN_WIDTHS,
+      body: tableBody,
+    },
+    layout: {
+      hLineWidth: () => GRID_LINE_WIDTH,
+      vLineWidth: () => GRID_LINE_WIDTH,
+      hLineColor: () => GRID_LINE_COLOR,
+      vLineColor: () => GRID_LINE_COLOR,
+      paddingLeft: () => 1,
+      paddingRight: () => 1,
+      paddingTop: () => (tight ? TIGHT_ROW_PADDING : 3),
+      paddingBottom: () => (tight ? TIGHT_ROW_PADDING : 3),
+      fillColor: () => '#ffffff',
+    },
+    pageBreak: pageBreakBefore ? ('before' as const) : undefined,
+  } as ContentTable & { pageBreak?: 'before' };
+}
+
+interface PageHeaderFigures {
+  totalIn: number;
+  initialOutBalance: number;
+  initialCurrentBalance: number;
+  balanceForwarded: number;
+}
+
+interface ModeContentResult {
+  content: unknown[];
+  // One entry per physical content chunk (== one physical PDF page, since
+  // every chunk boundary forces a pageBreak) — the header callback looks
+  // up `pageHeaderData[currentPage - 1]` to know which figures to print.
+  pageHeaderData: PageHeaderFigures[];
+}
+
+function buildDateModeContent(options: ChemicalDocDateOptions, unit: string): ModeContentResult {
+  const { transactions, initialCurrentBalance, initialOutBalance } = options;
 
   const totalIn = transactions
     .filter((t) => t.type === 'STOCK_IN')
@@ -227,97 +448,115 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
   // REPLENISH, since REPLENISH still carries a currentBalanceAfter even
   // though it doesn't change it) dated within [startDate, endDate]. If
   // there were no transactions in range at all, nothing moved, so it's
-  // just whatever "Initial Stock" already was. This is what "Initial
-  // Stock" becomes on the *next* report.
+  // just whatever "Initial Stock" already was.
   const lastTransactionInRange = transactions[transactions.length - 1];
   const balanceForwarded = lastTransactionInRange
     ? Number(lastTransactionInRange.currentBalanceAfter)
     : initialCurrentBalance;
 
-  const fmtDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '');
-
   // Replenish rows affect the chain (already reflected in later rows'
   // Balance (Out) values) but are never shown as their own table row.
   const displayedTransactions = transactions.filter((t) => t.type !== 'REPLENISH');
+  const dataRows: LogicalRow[] = displayedTransactions.map(rowForTransaction);
 
-  const dataRows: string[][] = displayedTransactions.map((t) => {
-    if (t.type === 'STOCK_IN') {
-      return [
-        fmtDate(t.dateReceived),
-        t.supplierInfo ?? '',
-        t.truckerCarrier ?? '',
-        t.lotBatchNo ?? '',
-        t.quantityReceived !== null ? fmtNum(Number(t.quantityReceived)) : '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        fmtNum(Number(t.balanceOut)),
-      ];
+  const rowChunks = chunkRowsFixedSize(dataRows, ROWS_PER_PAGE);
+
+  const headerData: PageHeaderFigures = {
+    totalIn,
+    initialOutBalance,
+    initialCurrentBalance,
+    balanceForwarded,
+  };
+
+  const content = rowChunks.map((chunkRows, idx) =>
+    buildTableContentBlock(chunkRows, unit, idx > 0, false)
+  );
+  const pageHeaderData = rowChunks.map(() => headerData);
+
+  return { content, pageHeaderData };
+}
+
+function buildMonthModeContent(options: ChemicalDocMonthOptions, unit: string): ModeContentResult {
+  const content: unknown[] = [];
+  const pageHeaderData: PageHeaderFigures[] = [];
+  let globalChunkIndex = 0;
+
+  for (const monthData of options.months) {
+    const displayedTransactions = monthData.transactions.filter((t) => t.type !== 'REPLENISH');
+
+    // Group real rows by day-of-month (UTC-based, matching how the date
+    // fields are stored — see lib/balance.ts / lib/timezone.ts).
+    const rowsByDay = new Map<number, LogicalRow[]>();
+    for (const t of displayedTransactions) {
+      const d = t.type === 'STOCK_IN' ? t.dateReceived : t.dateUsed;
+      if (!d) continue;
+      const day = d.getUTCDate();
+      const list = rowsByDay.get(day) ?? [];
+      list.push(rowForTransaction(t));
+      rowsByDay.set(day, list);
     }
-    return [
-      '',
-      '',
-      '',
-      '',
-      '',
-      fmtDate(t.dateUsed),
-      t.detailsOfUsage ?? '',
-      t.workOrderNo ?? '',
-      t.lotBatchNoUsed ?? '',
-      t.quantityUsed !== null ? fmtNum(Number(t.quantityUsed)) : '',
-      fmtNum(Number(t.balanceOut)),
-    ];
-  });
 
-  // Chunk into fixed-size pages of ROWS_PER_PAGE, padding the final chunk
-  // with blank rows so every page (including a lone, mostly-empty page)
-  // always shows exactly ROWS_PER_PAGE rows.
-  const rowChunks: string[][][] = [];
-  for (let i = 0; i < dataRows.length; i += ROWS_PER_PAGE) {
-    rowChunks.push(dataRows.slice(i, i + ROWS_PER_PAGE));
+    const daysInMonth = new Date(monthData.year, monthData.month, 0).getDate();
+    const monthPrefix = `${monthData.year}-${String(monthData.month).padStart(2, '0')}`;
+
+    const monthRows: LogicalRow[] = [];
+    let carryBalanceOut = monthData.initialOutBalance;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const real = rowsByDay.get(day);
+      if (real && real.length > 0) {
+        monthRows.push(...real);
+        const lastBalanceOutText = real[real.length - 1].values[COL_BALANCE_OUT];
+        const parsed = Number(lastBalanceOutText);
+        if (!Number.isNaN(parsed)) {
+          carryBalanceOut = parsed;
+        }
+      } else {
+        const dateStr = `${monthPrefix}-${String(day).padStart(2, '0')}`;
+        monthRows.push(syntheticNoUsageRow(dateStr, carryBalanceOut));
+        // carryBalanceOut is unchanged — nothing happened this day.
+      }
+    }
+
+    const headerData: PageHeaderFigures = {
+      totalIn: monthData.totalIn,
+      initialOutBalance: monthData.initialOutBalance,
+      initialCurrentBalance: monthData.initialCurrentBalance,
+      balanceForwarded: monthData.balanceForwarded,
+    };
+
+    const chunks = chunkRowsMaxSize(monthRows, MAX_ROWS_PER_MONTH_PAGE);
+    for (const chunkRows of chunks) {
+      content.push(buildTableContentBlock(chunkRows, unit, globalChunkIndex > 0, true));
+      pageHeaderData.push(headerData);
+      globalChunkIndex++;
+    }
   }
-  if (rowChunks.length === 0) {
-    rowChunks.push([]);
-  }
-  const lastChunk = rowChunks[rowChunks.length - 1];
-  while (lastChunk.length < ROWS_PER_PAGE) {
-    lastChunk.push(Array(NUM_COLS).fill(''));
-  }
+
+  return { content, pageHeaderData };
+}
+
+// def buildChemicalDocDefinition(): Input is one ChemicalDocOptions object
+// (rangeType: 'date' — the chemical record, its in-range transactions of
+// all types in chronological order, the export date range, the two
+// pre-computed opening-balance figures, and the global app
+// settings/signatory info; or rangeType: 'month' — the same chemical/
+// settings/range info, plus one pre-computed ChemicalDocMonthData entry
+// per calendar month spanned by the range). Output is one pdfmake
+// TDocumentDefinitions object, ready to hand to
+// renderDocDefinitionToBuffer().
+export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocumentDefinitions {
+  const { chemical, startDate, endDate, dateLabel, settings } = options;
+  const unit = chemical.unit;
+
+  const { content, pageHeaderData } =
+    options.rangeType === 'month'
+      ? buildMonthModeContent(options, unit)
+      : buildDateModeContent(options, unit);
 
   const signatoryLine = [settings.signatoryName, settings.signatoryCredentials]
     .filter(Boolean)
     .join(', ');
-
-  const unit = chemical.unit;
-
-  const content: any[] = rowChunks.map((chunkRows, idx) => {
-    const tableBody: any[] = [Array.from({ length: NUM_COLS }, (_, i) => headerCell(i, unit))];
-    for (const row of chunkRows) {
-      tableBody.push(row.map((v, i) => cell(v, i)));
-    }
-
-    return {
-      table: {
-        headerRows: 1,
-        widths: COLUMN_WIDTHS,
-        body: tableBody,
-      },
-      layout: {
-        hLineWidth: () => GRID_LINE_WIDTH,
-        vLineWidth: () => GRID_LINE_WIDTH,
-        hLineColor: () => GRID_LINE_COLOR,
-        vLineColor: () => GRID_LINE_COLOR,
-        paddingLeft: () => 1,
-        paddingRight: () => 1,
-        paddingTop: () => 3,
-        paddingBottom: () => 3,
-        fillColor: () => '#ffffff',
-      },
-      pageBreak: idx > 0 ? 'before' : undefined,
-    } as ContentTable & { pageBreak?: 'before' };
-  });
 
   const docDefinition: TDocumentDefinitions = {
     pageSize: 'LEGAL',
@@ -326,41 +565,56 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
     background: () => ({
       canvas: [{ type: 'rect', x: 0, y: 0, w: 2000, h: 2000, color: '#ffffff' }],
     }),
-    // Repeats on every page — this is what makes spillover pages carry
-    // the full format (register label, chemical/CPECS block, rule, and
-    // summary row), not just the bare table column headers.
-    header: (currentPage: number) => ({
-      margin: [30, 14, 30, 0],
-      stack: [
-        {
-          columns: [
-            {
-              width: '*',
-              stack: [
-                { text: settings.registerLabel || DEFAULT_REGISTER_LABEL, bold: true, fontSize: 10 },
-                { text: REGISTER_SUBTITLE, italics: true, fontSize: 8 },
-              ],
-            },
-            {
-              width: 'auto',
-              alignment: 'right',
-              stack: [
-                { text: `Page No. ${currentPage}`, fontSize: 8 },
-                { text: dateLabel ? `Date: ${dateLabel}` : `Date: ${startDate} to ${endDate}`, fontSize: 8 },
-              ],
-            },
-          ],
-        },
-        { text: chemical.cpecsDescriptor, style: 'title', margin: [0, 6, 0, 0] },
-        {
-          canvas: [{ type: 'line', x1: 0, y1: 0, x2: FULL_WIDTH_RULE, y2: 0, lineWidth: 0.75 }],
-          margin: [0, 3, 0, 3],
-        },
-        { text: 'CPECS (name, form, purity, packaging)', style: 'subtitle' },
-        summaryRowTable(unit, totalIn, initialOutBalance, initialCurrentBalance, balanceForwarded),
-      ],
-    }),
-    content,
+    // Repeats on every physical page — this is what makes spillover pages
+    // carry the full format (register label, chemical/CPECS block, rule,
+    // and summary row), not just the bare table column headers. The
+    // summary-row figures are looked up per physical page via
+    // pageHeaderData, so in 'month' mode each month's page(s) show that
+    // month's own Initial Stock/OUT/Balance Forwarded/IN figures, while
+    // the "Date:" text always reflects the overall requested range
+    // (dateLabel/startDate/endDate), never an individual month.
+    header: (currentPage: number) => {
+      const headerData =
+        pageHeaderData[currentPage - 1] ?? pageHeaderData[pageHeaderData.length - 1];
+      return {
+        margin: [30, 14, 30, 0],
+        stack: [
+          {
+            columns: [
+              {
+                width: '*',
+                stack: [
+                  { text: settings.registerLabel || DEFAULT_REGISTER_LABEL, bold: true, fontSize: 10 },
+                  { text: REGISTER_SUBTITLE, italics: true, fontSize: 8 },
+                ],
+              },
+              {
+                width: 'auto',
+                alignment: 'right',
+                stack: [
+                  { text: `Page No. ${currentPage}`, fontSize: 8 },
+                  { text: dateLabel ? `Date: ${dateLabel}` : `Date: ${startDate} to ${endDate}`, fontSize: 8 },
+                ],
+              },
+            ],
+          },
+          { text: chemical.cpecsDescriptor, style: 'title', margin: [0, 6, 0, 0] },
+          {
+            canvas: [{ type: 'line', x1: 0, y1: 0, x2: FULL_WIDTH_RULE, y2: 0, lineWidth: 0.75 }],
+            margin: [0, 3, 0, 3],
+          },
+          { text: 'CPECS (name, form, purity, packaging)', style: 'subtitle' },
+          summaryRowTable(
+            unit,
+            headerData?.totalIn ?? 0,
+            headerData?.initialOutBalance ?? 0,
+            headerData?.initialCurrentBalance ?? 0,
+            headerData?.balanceForwarded ?? 0
+          ),
+        ],
+      };
+    },
+    content: content as TDocumentDefinitions['content'],
     footer: () => ({
       margin: [30, 0, 30, 0],
       stack: [

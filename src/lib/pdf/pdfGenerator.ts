@@ -9,8 +9,9 @@
 
 import PdfPrinter from 'pdfmake';
 import { TDocumentDefinitions } from 'pdfmake/interfaces';
+import { Transaction } from '@prisma/client';
 import { prisma } from '../prisma';
-import { buildChemicalDocDefinition } from './chemicalDocument';
+import { buildChemicalDocDefinition, ChemicalDocMonthData } from './chemicalDocument';
 import { formatMonthRangeLabel } from '../timezone';
 
 // Font descriptors pdfmake needs — point these at the .ttf files described
@@ -53,14 +54,116 @@ export function renderDocDefinitionToBuffer(docDefinition: TDocumentDefinitions)
   });
 }
 
+// def buildMonthlyFigures(): Input is one already-fetched, chronologically
+// ordered (by sequenceNo) transaction list covering the whole requested
+// export range (ALL types, including REPLENISH), the range's resolved
+// "YYYY-MM-DD" startDate/endDate (assumed to already be whole-month
+// boundaries — the 1st of the first month through the last day of the
+// last month, which MonthRangePicker/ExportButton always produce), and
+// the Current Balance / Current Out Balance as of strictly before
+// startDate (0/0 if this chemical had no prior transaction). Output is
+// one ChemicalDocMonthData[] array, one entry per calendar month spanned
+// by the range, each carrying its own Initial Stock / OUT / Balance
+// Forwarded / IN figures computed strictly from that month's slice of the
+// ledger (see chemicalDocument.ts's module comment for the exact
+// definitions) — this is what makes 'month' mode's per-page balances
+// independent of the overall selected range.
+// Pseudocode:
+//   1. Enumerate every "YYYY-MM" key from startDate's month through
+//      endDate's month, inclusive.
+//   2. Bucket the transaction list by each row's own calendar month
+//      (whichever of dateReceived/dateUsed/dateReplenished is populated),
+//      preserving the incoming chronological order within each bucket.
+//   3. Walk the enumerated months in order, carrying a running
+//      { currentBalance, outBalance } baseline forward (seeded from the
+//      priorCurrentBalance/priorOutBalance params):
+//        a. initialCurrentBalance / initialOutBalance for this month =
+//           the baseline as of just before this month.
+//        b. totalIn = sum of quantityReceived across this month's
+//           STOCK_IN rows.
+//        c. If this month's bucket is non-empty: balanceForwarded = the
+//           LAST row's (by chronological/sequenceNo order — the chain of
+//           truth per lib/balance.ts) currentBalanceAfter; advance the
+//           baseline to that row's currentBalanceAfter/balanceOut before
+//           moving to the next month.
+//        d. If this month's bucket is empty: balanceForwarded =
+//           unchanged from initialCurrentBalance, and the baseline
+//           carries forward untouched to the next month.
+//   4. Return the resulting ChemicalDocMonthData[] array.
+export function buildMonthlyFigures(
+  transactions: Transaction[],
+  startDate: string,
+  endDate: string,
+  priorCurrentBalance: number,
+  priorOutBalance: number
+): ChemicalDocMonthData[] {
+  const monthKeys: string[] = [];
+  let [year, month] = startDate.slice(0, 7).split('-').map(Number);
+  const [endYear, endMonth] = endDate.slice(0, 7).split('-').map(Number);
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    monthKeys.push(`${year}-${String(month).padStart(2, '0')}`);
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+
+  const buckets = new Map<string, Transaction[]>();
+  for (const t of transactions) {
+    const d = t.dateReceived ?? t.dateUsed ?? t.dateReplenished;
+    if (!d) continue;
+    const key = d.toISOString().slice(0, 7);
+    const list = buckets.get(key) ?? [];
+    list.push(t);
+    buckets.set(key, list);
+  }
+
+  const months: ChemicalDocMonthData[] = [];
+  let baselineCurrent = priorCurrentBalance;
+  let baselineOut = priorOutBalance;
+
+  for (const key of monthKeys) {
+    const [yearStr, monthStr] = key.split('-');
+    const monthTransactions = buckets.get(key) ?? [];
+
+    const totalIn = monthTransactions
+      .filter((t) => t.type === 'STOCK_IN')
+      .reduce((sum, t) => sum + Number(t.quantityReceived ?? 0), 0);
+
+    const initialCurrentBalance = baselineCurrent;
+    const initialOutBalance = baselineOut;
+
+    let balanceForwarded = baselineCurrent;
+    if (monthTransactions.length > 0) {
+      const last = monthTransactions[monthTransactions.length - 1];
+      balanceForwarded = Number(last.currentBalanceAfter);
+      baselineCurrent = balanceForwarded;
+      baselineOut = Number(last.balanceOut);
+    }
+
+    months.push({
+      year: Number(yearStr),
+      month: Number(monthStr),
+      transactions: monthTransactions,
+      initialCurrentBalance,
+      initialOutBalance,
+      totalIn,
+      balanceForwarded,
+    });
+  }
+
+  return months;
+}
+
 // def generateChemicalPdf(): Input is one chemical id (string), one
 // export date range (startDate, endDate as "YYYY-MM-DD" strings — always
-// already-resolved concrete calendar-day boundaries, even in "Month
-// Selection" mode, where the caller resolves the chosen months into the
-// 1st of the start month and the last day of the end month before
-// calling this), and one rangeType ('date' | 'month', default 'date').
-// Output is a Promise resolving to one Buffer (the finished PDF for that
-// chemical).
+// already-resolved concrete calendar-day boundaries), and one rangeType
+// ('date' | 'month', default 'month' — every export entry point in the
+// app only offers Month Selection now; 'date' remains fully functional
+// for callers with a non-month-aligned range, e.g. the 5-year purge's
+// backup ZIP, which explicitly requests it). Output is a Promise
+// resolving to one Buffer (the finished PDF for that chemical).
 // Pseudocode:
 //   1. Fetch the chemical by id from Prisma; throw a "not found" error if
 //      missing.
@@ -69,33 +172,32 @@ export function renderDocDefinitionToBuffer(docDefinition: TDocumentDefinitions)
 //      dateReplenished for REPLENISH rows), ordered chronologically
 //      (falling back to sequenceNo to order same-day entries
 //      consistently). REPLENISH rows are included here even though
-//      they're excluded from the table itself (see
-//      chemicalDocument.ts) — they still affect the Out Balance chain,
-//      so the *last* transaction in range needs to be the true last one
-//      of any type.
+//      they're excluded from the table itself — they still affect the
+//      Out Balance chain, so the *last* transaction in any range/month
+//      needs to be the true last one of any type.
 //   3. Fetch the single AppSettings row (id=1) for the signature block.
-//   4. Compute two distinct "as of the day before startDate" figures from
-//      the last transaction (of any type) dated strictly before
-//      startDate:
-//        - initialCurrentBalance (its currentBalanceAfter): shown as
-//          "Initial Stock" — the Current Balance prior to this report's
-//          first entry.
-//        - initialOutBalance (its balanceOut): shown as the top "OUT (L)"
-//          figure — the Current Out Balance prior to this report's first
-//          entry, NOT a sum of usage within the range.
-//      Both default to 0 if no prior transaction exists.
-//   5. If rangeType === 'month', compute dateLabel via
-//      formatMonthRangeLabel(startDate, endDate) (e.g. "Jan - Jun,
-//      2024"); otherwise leave dateLabel undefined so the header falls
-//      back to the literal "Date: <start> to <end>" text.
-//   6. Call buildChemicalDocDefinition() with all of the above assembled
-//      into a ChemicalDocOptions object.
+//   4. Fetch the one prior transaction (of any type) dated strictly
+//      before startDate, to seed the opening Current Balance / Current
+//      Out Balance baseline (0/0 if none exists).
+//   5. If rangeType === 'month': compute dateLabel via
+//      formatMonthRangeLabel(startDate, endDate) — this is the header's
+//      "Date:" text for EVERY page, regardless of which month that page
+//      covers. Call buildMonthlyFigures() to get the per-month
+//      Initial Stock/OUT/Balance Forwarded/IN breakdown, and call
+//      buildChemicalDocDefinition() with rangeType: 'month' and that
+//      breakdown.
+//   6. If rangeType === 'date' (unchanged from before month-mode
+//      existed): dateLabel stays undefined so the header falls back to
+//      the literal "Date: <start> to <end>" text. Call
+//      buildChemicalDocDefinition() with rangeType: 'date' and the flat
+//      whole-range transactions/initialCurrentBalance/initialOutBalance
+//      fields.
 //   7. Call renderDocDefinitionToBuffer() on the result and return it.
 export async function generateChemicalPdf(
   chemicalId: string,
   startDate: string,
   endDate: string,
-  rangeType: 'date' | 'month' = 'date'
+  rangeType: 'date' | 'month' = 'month'
 ): Promise<Buffer> {
   const chemical = await prisma.chemical.findUnique({ where: { id: chemicalId } });
   if (!chemical) {
@@ -137,20 +239,36 @@ export async function generateChemicalPdf(
     },
     orderBy: { sequenceNo: 'desc' },
   });
-  const initialCurrentBalance = priorTransaction ? Number(priorTransaction.currentBalanceAfter) : 0;
-  const initialOutBalance = priorTransaction ? Number(priorTransaction.balanceOut) : 0;
+  const priorCurrentBalance = priorTransaction ? Number(priorTransaction.currentBalanceAfter) : 0;
+  const priorOutBalance = priorTransaction ? Number(priorTransaction.balanceOut) : 0;
 
-  const dateLabel = rangeType === 'month' ? formatMonthRangeLabel(startDate, endDate) : undefined;
+  if (rangeType === 'month') {
+    const dateLabel = formatMonthRangeLabel(startDate, endDate);
+    const months = buildMonthlyFigures(transactions, startDate, endDate, priorCurrentBalance, priorOutBalance);
+
+    const docDefinition = buildChemicalDocDefinition({
+      chemical,
+      rangeType: 'month',
+      startDate,
+      endDate,
+      dateLabel,
+      settings,
+      months,
+    });
+
+    return renderDocDefinitionToBuffer(docDefinition);
+  }
 
   const docDefinition = buildChemicalDocDefinition({
     chemical,
-    transactions,
+    rangeType: 'date',
     startDate,
     endDate,
-    dateLabel,
-    initialCurrentBalance,
-    initialOutBalance,
+    dateLabel: undefined,
     settings,
+    transactions,
+    initialCurrentBalance: priorCurrentBalance,
+    initialOutBalance: priorOutBalance,
   });
 
   return renderDocDefinitionToBuffer(docDefinition);

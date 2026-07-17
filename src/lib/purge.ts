@@ -48,7 +48,13 @@ export interface PurgePlanSummary {
 //   5. Call generateBulkExportZip(), scoped to the affected chemical ids
 //      and a date range spanning from the earliest affected transaction
 //      through the day before cutoffDate — this is the backup the caller
-//      must download before confirming.
+//      must download before confirming. Explicitly pass rangeType:
+//      'date' — this range is an arbitrary historical span, not
+//      necessarily aligned to whole calendar months, so it can't safely
+//      use 'month' mode's page-per-month/empty-day-fill layout (that
+//      layout assumes whole-month boundaries; generateBulkExportZip now
+//      defaults to 'month' since that's what the UI always sends, but
+//      this call site isn't UI-driven).
 //   6. Generate a purgeToken via randomUUID().
 //   7. Persist a PurgePreparation row: token, cutoffDate,
 //      transactionIdsToDelete (JSON array of ids), anchorTransactionIds
@@ -128,7 +134,8 @@ export async function preparePurge(
   const zipBuffer = await generateBulkExportZip(
     backupStartDate,
     dayBeforeCutoff,
-    affectedChemicalIds
+    affectedChemicalIds,
+    'date'
   );
 
   const purgeToken = randomUUID();
