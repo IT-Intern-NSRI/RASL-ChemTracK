@@ -313,6 +313,106 @@ export async function recalculateChain(chemicalId: string, fromSequenceNo: numbe
   });
 }
 
+// One chemical's beginning/end balance summary over a date range, as
+// shown on the bulk-export summary .txt (see src/lib/txt/balanceSummary.ts
+// and src/lib/zip/bulkExport.ts).
+//
+// beginningBalance / endBalance are "Current Balance" (total inventory,
+// currentBalanceAfter) — NOT "Current Out Balance" — since the summary is
+// meant to answer "how much of this chemical did we have, and how much is
+// left, across this range," regardless of how much was decanted into the
+// working container along the way.
+//
+// soldUsed is a pure sum of USAGE's quantityUsed within the range — it
+// deliberately does NOT net against any STOCK_IN that also happened in
+// range (so it does not, in general, equal endBalance - beginningBalance;
+// that difference would also fold in stock received during the range).
+export interface ChemicalBalanceSummary {
+  chemicalId: string;
+  chemicalName: string;
+  unit: string;
+  beginningBalance: number;
+  soldUsed: number;
+  endBalance: number;
+}
+
+// def computeChemicalBalanceSummary(): Input is one chemical id (string)
+// and one date range (startDate, endDate as "YYYY-MM-DD" strings,
+// inclusive on both ends). Output is a Promise resolving to one
+// ChemicalBalanceSummary.
+// Pseudocode:
+//   1. Load the chemical (name, unit); throw "not found" if missing.
+//   2. Beginning Balance = currentBalanceAfter of the last transaction (by
+//      sequenceNo — the chain of truth, same convention as
+//      pdfGenerator.ts's priorTransaction lookup) dated strictly before
+//      startDate, across all transaction types (checking whichever of
+//      dateReceived/dateUsed/dateReplenished is populated). 0 if none.
+//   3. End Balance = currentBalanceAfter of the last transaction dated on
+//      or before endDate. Falls back to Beginning Balance if there's no
+//      such transaction (nothing happened in or before the range).
+//   4. Sold/Used = sum of quantityUsed across every USAGE row whose
+//      dateUsed falls within [startDate, endDate] (inclusive). This is a
+//      separate query from steps 2-3 — it only looks at USAGE rows, and
+//      does NOT net against STOCK_IN, so it does not have to equal
+//      End Balance - Beginning Balance.
+//   5. Return { chemicalId, chemicalName, unit, beginningBalance,
+//      soldUsed, endBalance }.
+export async function computeChemicalBalanceSummary(
+  chemicalId: string,
+  startDate: string,
+  endDate: string
+): Promise<ChemicalBalanceSummary> {
+  const chemical = await prisma.chemical.findUniqueOrThrow({ where: { id: chemicalId } });
+
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  const end = new Date(`${endDate}T23:59:59.999Z`);
+
+  const beforeRange = await prisma.transaction.findFirst({
+    where: {
+      chemicalId,
+      OR: [
+        { dateReceived: { lt: start } },
+        { dateUsed: { lt: start } },
+        { dateReplenished: { lt: start } },
+      ],
+    },
+    orderBy: { sequenceNo: 'desc' },
+  });
+  const beginningBalance = beforeRange ? Number(beforeRange.currentBalanceAfter) : 0;
+
+  const throughRange = await prisma.transaction.findFirst({
+    where: {
+      chemicalId,
+      OR: [
+        { dateReceived: { lte: end } },
+        { dateUsed: { lte: end } },
+        { dateReplenished: { lte: end } },
+      ],
+    },
+    orderBy: { sequenceNo: 'desc' },
+  });
+  const endBalance = throughRange ? Number(throughRange.currentBalanceAfter) : beginningBalance;
+
+  const usageInRange = await prisma.transaction.aggregate({
+    where: {
+      chemicalId,
+      type: 'USAGE',
+      dateUsed: { gte: start, lte: end },
+    },
+    _sum: { quantityUsed: true },
+  });
+  const soldUsed = Number(usageInRange._sum.quantityUsed ?? 0);
+
+  return {
+    chemicalId,
+    chemicalName: chemical.name,
+    unit: chemical.unit,
+    beginningBalance,
+    soldUsed,
+    endBalance,
+  };
+}
+
 function schemaForType(type: TransactionType) {
   if (type === 'STOCK_IN') return stockInUpdateSchema;
   if (type === 'USAGE') return usageUpdateSchema;

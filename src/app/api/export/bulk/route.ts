@@ -1,8 +1,12 @@
 // src/app/api/export/bulk/route.ts
 //
 // POST -> a ZIP containing one PDF per (non-archived) chemical for the
-// requested date range. No-skip rule: chemicals with zero activity in
-// the range are still included, per project decision.
+// requested date range, plus a "balance-summary.txt" at the ZIP's root
+// with a Chemical Name / Beginning Balance / Sold-Used / End Balance
+// table (one row per included chemical) — see
+// src/lib/txt/balanceSummary.ts and src/lib/balance.ts's
+// computeChemicalBalanceSummary(). No-skip rule: chemicals with zero
+// activity in the range are still included, per project decision.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
@@ -23,8 +27,9 @@ import { jsonError } from '@/lib/apiHelpers';
 //   1. Require auth.
 //   2. Parse + validate the body with exportRangeSchema; 400 on failure.
 //   3. Call generateBulkExportZip(startDate, endDate, undefined,
-//      rangeType) — no chemicalIds filter, so every non-archived chemical
-//      is included.
+//      rangeType, true) — no chemicalIds filter, so every non-archived
+//      chemical is included; includeSummary: true so the returned ZIP
+//      bundles balance-summary.txt alongside the PDFs.
 //   4. Build a NextResponse from the returned Buffer with the appropriate
 //      headers (filename like "chemical-export_<start>_<end>.zip" in date
 //      mode, or "chemical-export_<abbreviated-month-range>.zip" in month
@@ -41,7 +46,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { startDate, endDate, rangeType } = parsed.data;
-  const zipBuffer = await generateBulkExportZip(startDate, endDate, undefined, rangeType);
+  const zipBuffer = await generateBulkExportZip(startDate, endDate, undefined, rangeType, true);
 
   const rangePart =
     rangeType === 'month'
