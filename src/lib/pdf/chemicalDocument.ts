@@ -343,10 +343,15 @@ function summaryRowTable(
           '',
           {
             text: [
-              { text: `OUT (${unit}) `, bold: true, italics: true },
-              { text: fmtNum(initialOutBalance) },
+              { text: `OUT (${unit}) `, bold: true, italics: true, noWrap: true },
+              {
+                text: fmtNum(initialOutBalance),
+                margin: [6, 0, 0, 0],
+                noWrap: true,
+              },
             ],
             fontSize: 10,
+            noWrap: true,
           },
           '',
           {
