@@ -523,6 +523,10 @@ tbody tr:hover {
   white-space: nowrap;
 }
 
+.tx-card__edit {
+  flex-shrink: 0;
+}
+
 .tx-card__details {
   margin-top: 0.7rem;
   padding-top: 0.7rem;
@@ -572,6 +576,12 @@ tbody tr:hover {
   display: flex;
   justify-content: flex-end;
   gap: 0.6rem;
+}
+
+.dialog--form {
+  max-width: 480px;
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
 }
 
 /* ---------- Export progress dialog ---------- */
