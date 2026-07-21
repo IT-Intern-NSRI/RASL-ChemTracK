@@ -878,7 +878,11 @@ tbody tr:hover {
     min-width: 0;
   }
 
-  table,
+  table {
+    display: block;
+    width: 100%;
+  }
+
   thead {
     display: none;
   }
