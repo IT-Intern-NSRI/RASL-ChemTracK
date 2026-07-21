@@ -18,7 +18,7 @@
 // Hitting the "Download" button opens a second, blocking progress modal
 // (separate from the month-picker popover, which closes) reading "Please
 // wait while your download is being processed.", with a close ("×")
-// button in its top-right corner and a visible 30-second countdown. Three
+// button in its top-right corner and a visible 60-second countdown. Three
 // ways this can resolve:
 //   - The export finishes before the countdown reaches 0: the file
 //     download triggers and the modal closes on its own.
@@ -41,7 +41,7 @@ interface ExportButtonProps {
   chemicalId?: string; // required when mode === 'single'
 }
 
-const COUNTDOWN_SECONDS = 30;
+const COUNTDOWN_SECONDS = 60;
 
 // def lastDayOfMonth(): Input is one string (yearMonth, "YYYY-MM").
 // Output is one string ("YYYY-MM-DD") — the last calendar day of that
@@ -108,7 +108,7 @@ export function ExportButton({ mode, chemicalId }: ExportButtonProps) {
 
   // def performExport(): Input is none (reads `resolvedRange` from
   // closure). Output is none (side effects: opens the progress modal and
-  // starts its 30-second countdown, fetches the appropriate export
+  // starts its 60-second countdown, fetches the appropriate export
   // endpoint, and — if that request wins the race against the countdown
   // and against being aborted — triggers a browser file download and
   // closes the modal).
@@ -119,7 +119,7 @@ export function ExportButton({ mode, chemicalId }: ExportButtonProps) {
   //      Again" retry), then start a fresh AbortController for this
   //      attempt.
   //   3. Close the month-picker popover, open the progress modal in its
-  //      'processing' state, and reset the countdown to 30.
+  //      'processing' state, and reset the countdown to 60.
   //   4. Start a 1-second interval decrementing the countdown; when it
   //      reaches 0, stop the interval and switch the modal to
   //      'timedOut' (leaving the request itself running in the
