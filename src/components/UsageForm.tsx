@@ -38,16 +38,19 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
     balanceOut: '',
   });
   const [currentOutBalance, setCurrentOutBalance] = useState(0);
+  const [unit, setUnit] = useState('');
   const [balanceOverridden, setBalanceOverridden] = useState(false);
 
   // def loadDefaults(): mirrors StockInForm.loadDefaults — fetches the
   // chemical's currentOutBalance (the figure a usage actually draws
-  // from) and seeds form.dateUsed to today (Manila).
+  // from) and unit (used to label the quantity/balance inputs, e.g.
+  // "Quantity Used (L)"), and seeds form.dateUsed to today (Manila).
   async function loadDefaults(): Promise<void> {
     const response = await fetch(`/api/chemicals/${chemicalId}`);
     if (response.ok) {
       const chemical = await response.json();
       setCurrentOutBalance(Number(chemical.currentOutBalance));
+      setUnit(chemical.unit);
     }
 
     // Mirrors src/lib/timezone.ts's getTodayManila() on the client, since
@@ -133,7 +136,7 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
         />
       </label>
       <label className="field">
-        Quantity Used
+        Quantity Used{unit ? ` (${unit})` : ''}
         <input
           type="number"
           step="any"
@@ -143,7 +146,7 @@ export function UsageForm({ chemicalId, onSubmit }: UsageFormProps) {
         />
       </label>
       <label className="field">
-        Balance (Out)
+        Balance (Out){unit ? ` (${unit})` : ''}
         <input
           type="number"
           step="any"

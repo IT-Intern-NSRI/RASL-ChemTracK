@@ -38,14 +38,17 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
     balanceOut: '', // left blank until the user overrides; auto-computed for display
   });
   const [currentOutBalance, setCurrentOutBalance] = useState(0);
+  const [unit, setUnit] = useState('');
   const [balanceOverridden, setBalanceOverridden] = useState(false);
 
   // def loadDefaults(): Input is none. Output is none (side effect:
-  // fetches the chemical's currentOutBalance and today's Manila date, and
-  // seeds `form`/`currentOutBalance` accordingly). Runs once on mount via
-  // useEffect.
+  // fetches the chemical's currentOutBalance/unit and today's Manila
+  // date, and seeds `form`/`currentOutBalance`/`unit` accordingly). Runs
+  // once on mount via useEffect.
   // Pseudocode:
-  //   1. Fetch GET /api/chemicals/${chemicalId}; store currentOutBalance.
+  //   1. Fetch GET /api/chemicals/${chemicalId}; store currentOutBalance
+  //      and unit (used to label the quantity/balance inputs, e.g.
+  //      "Quantity Received (L)").
   //   2. Fetch (or receive as a prop/server default) today's date in
   //      Asia/Manila; set form.dateReceived to it.
   async function loadDefaults(): Promise<void> {
@@ -53,6 +56,7 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
     if (response.ok) {
       const chemical = await response.json();
       setCurrentOutBalance(Number(chemical.currentOutBalance));
+      setUnit(chemical.unit);
       setForm((prev) => ({
         ...prev,
         balanceOut: prev.balanceOut || String(computeLiveBalance(Number(chemical.currentOutBalance))),
@@ -139,7 +143,7 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
         />
       </label>
       <label className="field">
-        Quantity Received
+        Quantity Received{unit ? ` (${unit})` : ''}
         <input
           type="number"
           step="any"
@@ -149,7 +153,7 @@ export function StockInForm({ chemicalId, onSubmit }: StockInFormProps) {
         />
       </label>
       <label className="field">
-        Balance (Out)
+        Balance (Out){unit ? ` (${unit})` : ''}
         <input
           type="number"
           step="any"

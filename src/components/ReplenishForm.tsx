@@ -35,16 +35,19 @@ export function ReplenishForm({ chemicalId, onSubmit }: ReplenishFormProps) {
     balanceOut: '', // left blank until the user overrides; auto-computed for display
   });
   const [currentOutBalance, setCurrentOutBalance] = useState(0);
+  const [unit, setUnit] = useState('');
   const [balanceOverridden, setBalanceOverridden] = useState(false);
 
   // def loadDefaults(): mirrors StockInForm.loadDefaults — fetches the
-  // chemical's currentOutBalance and seeds form.dateReplenished to today
-  // (Manila).
+  // chemical's currentOutBalance and unit (used to label the
+  // quantity/balance inputs, e.g. "Quantity Replenished (L)"), and seeds
+  // form.dateReplenished to today (Manila).
   async function loadDefaults(): Promise<void> {
     const response = await fetch(`/api/chemicals/${chemicalId}`);
     if (response.ok) {
       const chemical = await response.json();
       setCurrentOutBalance(Number(chemical.currentOutBalance));
+      setUnit(chemical.unit);
     }
 
     // Mirrors src/lib/timezone.ts's getTodayManila() on the client, since
@@ -103,7 +106,7 @@ export function ReplenishForm({ chemicalId, onSubmit }: ReplenishFormProps) {
         />
       </label>
       <label className="field">
-        Quantity Replenished
+        Quantity Replenished{unit ? ` (${unit})` : ''}
         <input
           type="number"
           step="any"
@@ -121,7 +124,7 @@ export function ReplenishForm({ chemicalId, onSubmit }: ReplenishFormProps) {
         />
       </label>
       <label className="field">
-        Balance (Out)
+        Balance (Out){unit ? ` (${unit})` : ''}
         <input
           type="number"
           step="any"
