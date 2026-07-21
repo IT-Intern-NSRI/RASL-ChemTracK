@@ -10,12 +10,23 @@
 
 import './globals.css';
 import Link from 'next/link';
+import type { Viewport } from 'next';
 import { LogoutButton } from '@/components/LogoutButton';
 import { SplashScreen } from '@/components/SplashScreen';
 
 export const metadata = {
   title: 'ChemTrack',
   description: 'Daily chemical inventory and usage ledger',
+};
+
+// Without this, mobile browsers fall back to a ~980px "desktop layout"
+// viewport and zoom the whole page out to fit, which is why the table's
+// existing @media (max-width: 640px) stacked-card CSS (see globals.css)
+// never actually fired on real phones — the browser never reports a
+// viewport narrower than 640px in the first place.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

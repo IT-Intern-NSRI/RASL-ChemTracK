@@ -122,6 +122,9 @@ model AppSettings {
   signatoryName        String?
   signatoryCredentials String? // e.g. "Ph.D., R.Ch."
   signatoryTitle       String? // e.g. "Pollution Control Officer, NSRI"
+  signatureImage       String? // uploaded e-signature, stored as a base64 data URL (e.g. "data:image/png;base64,...");
+  // printed over the signatory name on every exported PDF. Stored in the DB
+  // rather than on disk since Render's free tier has no persistent filesystem.
   passwordHash         String
   updatedAt            DateTime @updatedAt
 }

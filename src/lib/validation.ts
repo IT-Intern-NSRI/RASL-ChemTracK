@@ -79,6 +79,14 @@ export const appSettingsSchema = z.object({
   signatoryName: z.string().optional(),
   signatoryCredentials: z.string().optional(),
   signatoryTitle: z.string().optional(),
+  // Base64 data URL (e.g. "data:image/png;base64,...") of the uploaded
+  // e-signature, or null to remove an existing one. Capped well above any
+  // reasonable signature image so a stray huge upload doesn't bloat the row.
+  signatureImage: z
+    .string()
+    .max(2_000_000, 'Signature image is too large')
+    .nullable()
+    .optional(),
   newPassword: z.string().min(8).optional(),
 });
 export type AppSettingsInput = z.infer<typeof appSettingsSchema>;

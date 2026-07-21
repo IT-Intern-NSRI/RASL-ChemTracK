@@ -651,6 +651,20 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
     footer: () => ({
       margin: [30, 0, 30, 0],
       stack: [
+        // The uploaded e-signature (a base64 data URL) prints directly over
+        // the signatory name, the way an ink signature sits above a printed
+        // name on a paper form. A negative bottom margin pulls the name (and
+        // its rule) up underneath the image so they visually overlap instead
+        // of just stacking one above the other.
+        ...(settings.signatureImage
+          ? [
+              {
+                image: settings.signatureImage,
+                width: 110,
+                margin: [40, 6, 0, -22] as [number, number, number, number],
+              },
+            ]
+          : []),
         { text: signatoryLine, bold: true, fontSize: 10, margin: [40, 6, 0, 0] } as ContentText,
         { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.75 }], margin: [0, 2, 0, 2] },
         { text: settings.signatoryTitle ?? '', italics: true, fontSize: 10, margin: [40, 0, 0, 0] },
