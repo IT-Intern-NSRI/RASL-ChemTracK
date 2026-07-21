@@ -661,7 +661,7 @@ export function buildChemicalDocDefinition(options: ChemicalDocOptions): TDocume
               {
                 image: settings.signatureImage,
                 width: 110,
-                margin: [40, 2, 0, -22] as [number, number, number, number],
+                margin: [40, 2, 0, -18] as [number, number, number, number],
               },
             ]
           : []),
