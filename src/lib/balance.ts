@@ -495,9 +495,22 @@ export async function editTransaction(transactionId: string, updates: Record<str
 // a recalculation of both balance chains).
 // Pseudocode:
 //   1. Load the transaction; throw a "not found" error if missing.
-//   2. Note its chemicalId and sequenceNo.
-//   3. Delete the row.
-//   4. Call recalculateChain(chemicalId, sequenceNo) so every later row
+//   2. If it's an anchor row (isAnchor === true), throw a descriptive
+//      error and refuse to delete it. An anchor is, by construction, the
+//      sole remaining row for its chemical whose currentBalanceAfter/
+//      balanceOut encode everything that came before an earlier 5-year
+//      purge (see lib/purge.ts's module comment). recalculateChain()
+//      seeds its running baseline from "the transaction immediately
+//      before fromSequenceNo" — if the anchor itself is deleted, that
+//      lookup finds nothing (its own predecessors were already purged),
+//      so the baseline would silently reset to 0/0 and every later
+//      transaction's Current Balance / Current Out Balance (and any
+//      export's Initial Stock / Balance Forwarded figures) would be
+//      recomputed from a wrong, zeroed starting point. This is the one
+//      deletion this function must never allow.
+//   3. Note its chemicalId and sequenceNo.
+//   4. Delete the row.
+//   5. Call recalculateChain(chemicalId, sequenceNo) so every later row
 //      (which now has one fewer predecessor) is recomputed. If this was
 //      the last row for the chemical, recalculateChain naturally resets
 //      chemical.currentBalance / chemical.currentOutBalance to the new
@@ -506,6 +519,12 @@ export async function deleteTransaction(transactionId: string): Promise<void> {
   const existing = await prisma.transaction.findUnique({ where: { id: transactionId } });
   if (!existing) {
     throw new Error('Transaction not found');
+  }
+
+  if (existing.isAnchor) {
+    throw new Error(
+      'This entry is an anchor row retained by a prior 5-year purge. It preserves the correct opening balance for every later entry, so it cannot be deleted.'
+    );
   }
 
   const { chemicalId, sequenceNo } = existing;

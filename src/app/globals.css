@@ -555,6 +555,10 @@ tbody tr:hover {
   flex-shrink: 0;
 }
 
+.tx-card__delete {
+  flex-shrink: 0;
+}
+
 .tx-card__details {
   margin-top: 0.7rem;
   padding-top: 0.7rem;

@@ -50,6 +50,11 @@ export async function PATCH(request: NextRequest, { params: paramsPromise }: Rou
 //   1. Require auth.
 //   2. Call deleteTransaction(params.id).
 //   3. Return { success: true }.
+//   4. deleteTransaction() throws "Transaction not found" (-> 404) if the
+//      id doesn't exist, or its anchor-row guard message (-> 409, since
+//      the row exists but the deletion conflicts with data integrity
+//      guarantees from a prior purge) if it refuses to delete an anchor
+//      row. Any other failure falls back to 400.
 export async function DELETE(request: NextRequest, { params: paramsPromise }: RouteParams): Promise<NextResponse> {
   const params = await paramsPromise;
   if (!(await requireAuth())) {
@@ -61,6 +66,7 @@ export async function DELETE(request: NextRequest, { params: paramsPromise }: Ro
     return jsonOk({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to delete transaction';
-    return jsonError(message, message === 'Transaction not found' ? 404 : 400);
+    const status = message === 'Transaction not found' ? 404 : message.includes('anchor row') ? 409 : 400;
+    return jsonError(message, status);
   }
 }
